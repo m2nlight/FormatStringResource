@@ -1,0 +1,6 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<StringResourceFile xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Item id="BAR" text="#2" />
+  <Item id="FOO" text="#3" />
+  <Item id="ZOO" text="#4" />
+</StringResourceFile>

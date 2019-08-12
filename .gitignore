@@ -1,0 +1,14 @@
+.DS_Store
+.vs/
+.dotnet/
+.nuget/
+.idea/
+.sonarqube/
+bin/
+obj/
+publish/
+TestResults/
+coverage.json
+coverage.opencover.xml
+*.user
+*.log

@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp3.0</TargetFramework>
+    <Copyright>Copyright (c) 2019 m2nlight</Copyright>
+    <VersionSuffix>$(VersionSuffix)</VersionSuffix>
+    <Version>1.0.0</Version>
+    <Version Condition=" '$(VersionSuffix)' != '' ">$(Version)$(VersionSuffix)</Version>
+    <Authors>m2nlight</Authors>
+    <Description>Format StringResource.xml files</Description>
+    <LangVersion>8.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <IsWindows Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Windows)))' == 'true'">true</IsWindows>
+    <IsOSX Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::OSX)))' == 'true'">true</IsOSX>
+    <IsLinux Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Linux)))' == 'true'">true</IsLinux>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(IsWindows)'=='true'">
+    <DefineConstants>WINDOWS</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(IsOSX)'=='true'">
+    <DefineConstants>OSX</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(IsLinux)'=='true'">
+    <DefineConstants>LINUX</DefineConstants>
+  </PropertyGroup>
+  <!-- R2R -->
+  <PropertyGroup Condition="$(DefineConstants.Contains(R2R))">
+    <PublishReadyToRun>true</PublishReadyToRun>
+  </PropertyGroup>
+  <!--<ItemGroup Condition="$(DefineConstants.Contains(R2R))">
+    <PublishReadyToRunExclude Include="FilenameOfAssemblyToExclude.dll" />
+  </ItemGroup>-->
+  <!-- AOT -->
+  <PropertyGroup Condition="$(DefineConstants.Contains(AOT))">
+    <IlcOptimizationPreference>Size</IlcOptimizationPreference>
+    <IlcGenerateCompleteTypeMetadata>false</IlcGenerateCompleteTypeMetadata>
+    <IlcGenerateStackTraceData>false</IlcGenerateStackTraceData>
+  </PropertyGroup>
+  <ItemGroup Condition="$(DefineConstants.Contains(AOT))">
+    <PackageReference Include="Microsoft.DotNet.ILCompiler" Version="1.0.0-alpha-*" />
+  </ItemGroup>
+</Project>
