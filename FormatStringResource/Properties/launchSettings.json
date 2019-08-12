@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "FormatStringResource": {
+      "commandName": "Project",
+      "commandLineArgs": "--help"
+    }
+  }
+}
