@@ -4,7 +4,7 @@ Format StringResource.xml files
 
 ## Environment
 
-- dotnet core 3 (preview 7 and later)
+- dotnet 3 (preview 7 and later)
 - Windows/Linux/macOS
 
 ## Build
@@ -32,7 +32,7 @@ C:\> FormatStringResource.exe --log 1.log --list listfile.txt
 C:\> type listfile.txt | FormatStringResource.exe --log 1.log -L
 ```
 
-__macOS/Linux__
+__MacOS/Linux__
 
 ```text
 ./FormatStringResource --log 1.log StringResource.xml
@@ -49,5 +49,3 @@ cat listfile.txt | ./FormatStringResource --log 1.log -L
 ```
 
 Get help via `--help` argument.
-
-

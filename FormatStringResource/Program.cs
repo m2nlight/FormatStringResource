@@ -17,6 +17,7 @@ namespace FormatStringResource
         private static ConsoleColor DefaultForegroundColor;
         private static readonly object SyncLock = new object();
         private static readonly string StdinPipeName = "<Stdin Pipe>";
+        private static readonly int PrintFileNotExistCount = 10;
         private static string[] InputFiles;
         private static bool HasStdinInput;
         private static bool PrintVerbose;
@@ -30,6 +31,8 @@ namespace FormatStringResource
         private static long CostCount;
         private const double GB = 1 << (10 * 3);
 
+        // DEBUG members
+        private const int DefaultAttachTimeout = 10;
 
         private static void Main(string[] args)
         {
@@ -60,7 +63,7 @@ namespace FormatStringResource
 
         private static void PrintCount()
         {
-            WriteLine(Console.Out, DefaultForegroundColor, $"\nSUCCESS: {OKCount:N0}    FAIL: {FailCount:N0}    COST: {CostCount / 1000f:N3}s");
+            WriteLine(Console.Out, DefaultForegroundColor, $"{Environment.NewLine}SUCCESS: {OKCount:N0}    FAIL: {FailCount:N0}    COST: {CostCount / 1000f:N3}s");
         }
 
         private static void FormatFiles()
@@ -94,7 +97,6 @@ namespace FormatStringResource
             }
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void FormatFile(string filename)
         {
             try
@@ -155,35 +157,26 @@ namespace FormatStringResource
                     let id = (string)item.Attribute("id")
                     let text = (string)item.Attribute("text")
                     where item != null && id != null
-                    select new ItemNode(id, text, node);
-            var dict = new Dictionary<string, List<ItemNode>>();
-            foreach (var itemNode in q)
+                    group new { text, node } by id into g
+                    where g.Count() > 1
+                    select g;
+            foreach (var g in q)
             {
-                if (dict.TryGetValue(itemNode.Id, out var itemNodes))
+                var array = g.ToArray();
+                for (int i = 0; i < array.Length - 1; i++)
                 {
-                    itemNodes.Add(itemNode);
-                    continue;
-                }
-                dict.Add(itemNode.Id, new List<ItemNode> { itemNode });
-            }
-            var dupValues = dict.Values.Where(n => n.Count > 1);
-            foreach (var dupItemNodes in dupValues)
-            {
-                for (int i = 0; i < dupItemNodes.Count - 1; i++)
-                {
-                    var itemNode = dupItemNodes[i];
                     WriteLine(Console.Out,
-                        ConsoleColor.Yellow,
-                        $"{inputName} - Removing duplicate item: id: {itemNode.Id} text: {itemNode.Text}",
-                        onlyLogfile: !PrintVerbose);
-                    itemNode.Node.Remove();
+                       ConsoleColor.Yellow,
+                       $"{inputName} - Removing duplicate item: id: {g.Key} text: {array[i].text}",
+                       onlyLogfile: !PrintVerbose);
+                    array[i].node.Remove();
                 }
-                var last = dupItemNodes.Last();
                 WriteLine(Console.Out,
-                    ConsoleColor.Yellow,
-                    $"{inputName} -               Keep item: id: {last.Id} text: {last.Text}",
-                    onlyLogfile: !PrintVerbose);
+                   ConsoleColor.Yellow,
+                   $"{inputName} -               Keep item: id: {g.Key} text: {array[array.Length - 1].text}",
+                   onlyLogfile: !PrintVerbose);
             }
+
             if (isFile && !DryRun)
             {
                 if (Backup)
@@ -239,7 +232,7 @@ namespace FormatStringResource
                 }
                 if (Logfile != null)
                 {
-                    Logfile.WriteLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fffffff} {value.TrimStart()}");
+                    Logfile.WriteLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fffffff} {value}");
                 }
             }
         }
@@ -297,7 +290,11 @@ namespace FormatStringResource
                 }
                 else
                 {
-                    if (attachTimeout < 0) attachTimeout = 10;
+                    if (attachTimeout < 0)
+                    {
+                        attachTimeout = DefaultAttachTimeout;
+                    }
+
                     var canCursorMove = true;
                     try
                     {
@@ -309,16 +306,25 @@ namespace FormatStringResource
                     {
                         canCursorMove = false;
                     }
+
                     for (int i = 0; i < attachTimeout; i++)
                     {
+                        var sec = attachTimeout - i;
                         if (canCursorMove)
                         {
-                            Console.Write($"DEBUG MODE: Waitting {attachTimeout - i}s for debugger attach...");
-                            Console.CursorLeft = 0;
+                            Console.Write($"DEBUG MODE: Waitting {sec:N0}s for debugger attach...");
+                            if (sec > 1)
+                            {
+                                Console.CursorLeft = 0;
+                            }
+                            else
+                            {
+                                Console.WriteLine();
+                            }
                         }
                         else
                         {
-                            Console.WriteLine($"DEBUG MODE: Waitting {attachTimeout - i}s for debugger attach...");
+                            Console.WriteLine($"DEBUG MODE: Waitting {sec:N0}s for debugger attach...");
                         }
                         Thread.Sleep(1000);
                     }
@@ -331,7 +337,7 @@ namespace FormatStringResource
         {
             if (args.Length == 0 && !Console.IsInputRedirected)
             {
-                WriteAndExit(ExitCode.ParseError, "no input file\nuse --help to get usage");
+                WriteAndExit(ExitCode.ParseError, $"no input file{Environment.NewLine}use --help to get usage");
                 return;
             }
             var logFile = "";
@@ -355,7 +361,7 @@ namespace FormatStringResource
 
                     if (arg == "--help")
                     {
-                        WriteAndExit(ExitCode.Success, $"{GetVersionText()}\n{GetUsageText()}");
+                        WriteAndExit(ExitCode.Success, $"{GetVersionText()}{Environment.NewLine}{GetUsageText()}");
                         return;
                     }
 
@@ -565,17 +571,25 @@ namespace FormatStringResource
             if (filesNotExist.Count > 0)
             {
                 // print files not exist error
-                var appendText = new StringBuilder();
+                var sb = new StringBuilder();
+                sb.AppendFormat("{0:N0} files can't found{1}", filesNotExist.Count, Environment.NewLine);
+                var lineNumber = 1;
                 foreach (var file in filesNotExist)
                 {
-                    appendText.AppendLine(file);
+                    if (!PrintVerbose && lineNumber++ > PrintFileNotExistCount)
+                    {
+                        sb.AppendLine("...");
+                        break;
+                    }
+                    sb.AppendLine(file);
                 }
-                WriteAndExit(ExitCode.FilesNotExist, appendText.ToString());
+                WriteAndExit(ExitCode.FilesNotExist, sb.ToString());
                 return;
             }
             InputFiles = inputFiles.OrderBy(n => n).ToArray();
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static string FormatFilename(string input)
         {
 #if WINDOWS
@@ -619,7 +633,7 @@ namespace FormatStringResource
         -v, --verbose        output verbose information
             --version        output version information and exit";
 #if DEBUG
-            usage = $@"{usage}
+            usage += $@"
 
     DEBUG options
         --debug-attach [seconds]  wait debugger attach";
@@ -630,9 +644,10 @@ namespace FormatStringResource
         private static string GetVersionText()
         {
             var assembly = Assembly.GetExecutingAssembly();
-            return string.Format("{0} v{1}\n{2}",
+            return string.Format("{0} v{1}{2}{3}",
                 AppDomain.CurrentDomain.FriendlyName,
                 assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
+                Environment.NewLine,
                 assembly.GetCustomAttribute<AssemblyDescriptionAttribute>()?.Description
             );
         }
@@ -644,22 +659,22 @@ namespace FormatStringResource
                 case ExitCode.Success:
                     if (!string.IsNullOrEmpty(appendText))
                     {
-                        WriteLine(Console.Out, DefaultForegroundColor, $"{appendText}");
+                        WriteLine(Console.Out, DefaultForegroundColor, appendText);
                     }
                     break;
                 case ExitCode.ParseError:
-                    WriteLine(Console.Error, DefaultForegroundColor, $"ERROR: arguments error\n{appendText}");
+                    WriteLine(Console.Error, DefaultForegroundColor, $"ERROR: arguments error{Environment.NewLine}{appendText}");
                     break;
                 case ExitCode.FilesNotExist:
-                    WriteLine(Console.Error, DefaultForegroundColor, $"ERROR: Files not exist\n{appendText}");
+                    WriteLine(Console.Error, DefaultForegroundColor, $"ERROR: Files not exist{Environment.NewLine}{appendText}");
                     break;
                 case ExitCode.LoadXmlError:
-                    WriteLine(Console.Error, DefaultForegroundColor, $"ERROR: load xml error\n{appendText}");
+                    WriteLine(Console.Error, DefaultForegroundColor, $"ERROR: load xml error{Environment.NewLine}{appendText}");
                     break;
                 default:
                     if (!string.IsNullOrEmpty(appendText))
                     {
-                        WriteLine(Console.Error, DefaultForegroundColor, $"{appendText}");
+                        WriteLine(Console.Error, DefaultForegroundColor, appendText);
                     }
                     break;
             }
@@ -693,20 +708,5 @@ namespace FormatStringResource
         ParseError,
         FilesNotExist,
         LoadXmlError
-    }
-
-
-    internal class ItemNode
-    {
-        public string Id { get; set; }
-        public string Text { get; set; }
-        public XNode Node { get; set; }
-
-        public ItemNode(string id, string text, XNode node)
-        {
-            Id = id;
-            Text = text;
-            Node = node;
-        }
     }
 }

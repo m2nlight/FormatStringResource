@@ -28,7 +28,7 @@ for runtime in "${array[@]}"; do
 	if [ $ret = 0 ]; then
 		printf '\n\033[1;32m'SUCCESS'\033[0m\n'
 	else
-		printf '\n\033[1;31m'ERROR: $ret'\033[0m\n'
+		printf '\n\033[1;31m'"ERROR: $ret"'\033[0m\n'
 	fi
 	let num+=1
 done
