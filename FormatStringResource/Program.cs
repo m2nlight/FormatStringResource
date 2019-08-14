@@ -22,9 +22,8 @@ namespace FormatStringResource
         private static bool HasStdinInput;
         private static bool PrintVerbose;
         private static bool Backup = true;
+        private static bool NoFormatOutput;
         private static bool DryRun;
-        private static bool IgnoreHeader;
-        private static SaveOptions SaveOptions = SaveOptions.None;
         private static TextWriter Logfile;
         private static int OKCount;
         private static int FailCount;
@@ -63,7 +62,8 @@ namespace FormatStringResource
 
         private static void PrintCount()
         {
-            WriteLine(Console.Out, DefaultForegroundColor, $"{Environment.NewLine}SUCCESS: {OKCount:N0}    FAIL: {FailCount:N0}    COST: {CostCount / 1000f:N3}s");
+            WriteLine(Console.Out, DefaultForegroundColor,
+                $"{Environment.NewLine}SUCCESS: {OKCount:N0}    FAIL: {FailCount:N0}    COST: {CostCount / 1000f:N3}s");
         }
 
         private static void FormatFiles()
@@ -76,12 +76,12 @@ namespace FormatStringResource
             var stopWatch = new Stopwatch();
             stopWatch.Start();
             Parallel.ForEach(InputFiles, filename => FormatFile(filename));
-            FormatStdioInput();
+            FormatStdin();
             stopWatch.Stop();
             CostCount = stopWatch.ElapsedMilliseconds;
         }
 
-        private static void FormatStdioInput()
+        private static void FormatStdin()
         {
             if (!HasStdinInput)
             {
@@ -89,11 +89,12 @@ namespace FormatStringResource
             }
             try
             {
-                FormatXML(Console.OpenStandardInput(), StdinPipeName, false);
+                FormatXML(Console.OpenStandardInput(), StdinPipeName, isFile: false);
             }
             catch (Exception ex)
             {
-                WriteLine(Console.Error, ConsoleColor.Red, $"[FAIL] {StdinPipeName} - {ex.Message}", plusFail: true);
+                WriteLine(Console.Error, ConsoleColor.Red,
+                    $"[FAIL] {StdinPipeName} - {ex.Message}", plusFail: true);
             }
         }
 
@@ -103,55 +104,56 @@ namespace FormatStringResource
             {
                 var fileAccess = DryRun ? FileAccess.Read : FileAccess.ReadWrite;
                 using var stream = File.Open(filename, FileMode.Open, fileAccess, FileShare.Read);
-                FormatXML(stream, filename, true);
+                FormatXML(stream, filename, isFile: true);
             }
             catch (Exception ex)
             {
-                WriteLine(Console.Error, ConsoleColor.Red, $"[FAIL] {filename} - {ex.Message}", plusFail: true);
+                WriteLine(Console.Error, ConsoleColor.Red,
+                    $"[FAIL] {filename} - {ex.Message}", plusFail: true);
             }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void FormatXML(Stream stream, string inputName, bool isFile)
         {
-            var content = "";
-            if (IgnoreHeader)
+            // check head
+            const string xmlHead = "<?xml";
+            const string xmlHeadEnd = "?>";
+            using var reader = new StreamReader(stream);
+            var chars = new char[512];
+            var readNum = reader.Read(chars, 0, chars.Length);
+            if (readNum <= 0)
             {
-                var reader = new StreamReader(stream, true);
-                var firstLine = reader.ReadLine();
-                if (firstLine == null)
+                throw new Exception("content is empty");
+            }
+            var span = new ReadOnlySpan<char>(chars, 0, readNum);
+            if (!span.StartsWith(xmlHead))
+            {
+                throw new Exception("invalid xml format");
+            }
+            // skip xml description
+            var foundIndex = span[xmlHead.Length..].IndexOf(xmlHeadEnd);
+            if (foundIndex <= 0)
+            {
+                throw new Exception("invalid xml format");
+            }
+            var startIndex = xmlHead.Length + foundIndex + 2;
+            // load content
+            var capacity = 0;
+            if (stream.CanSeek)
+            {
+                var remainLength = stream.Length - startIndex;
+                if (remainLength < int.MaxValue)
                 {
-                    throw new Exception("content is empty");
-                }
-                if (firstLine.StartsWith("<?xml "))
-                {
-                    if (reader.BaseStream.CanSeek)
-                    {
-                        var count = reader.CurrentEncoding.GetByteCount(firstLine);
-                        reader.BaseStream.Seek(count, SeekOrigin.Begin);
-                    }
-                    else
-                    {
-                        content = reader.ReadToEnd();
-                    }
-                }
-                else
-                {
-                    if (reader.BaseStream.CanSeek)
-                    {
-                        reader.BaseStream.Seek(0, SeekOrigin.Begin);
-                    }
-                    else
-                    {
-                        content = reader.ReadToEnd();
-                        content = $"{firstLine}{content}";
-                    }
+                    capacity = (int)remainLength;
                 }
             }
-
-            var root = string.IsNullOrEmpty(content)
-                        ? XElement.Load(stream)
-                        : XElement.Parse(content);
+            var sb = capacity > 0 ? new StringBuilder(capacity) : new StringBuilder();
+            sb.Append(chars, startIndex, span.Length - startIndex);
+            sb.Append(reader.ReadToEnd());
+            // parse content
+            var loadOptions = NoFormatOutput ? LoadOptions.PreserveWhitespace : LoadOptions.None;
+            var root = XElement.Parse(sb.ToString(), loadOptions);
             var q = from item in root.Descendants("Item")
                     let node = item as XNode
                     let id = (string)item.Attribute("id")
@@ -176,7 +178,7 @@ namespace FormatStringResource
                    $"{inputName} -               Keep item: id: {g.Key} text: {array[array.Length - 1].text}",
                    onlyLogfile: !PrintVerbose);
             }
-
+            // file operations
             if (isFile && !DryRun)
             {
                 if (Backup)
@@ -192,20 +194,22 @@ namespace FormatStringResource
                     }
                     File.Copy(inputName, backupFilename, true);
                 }
+                var saveOptions = NoFormatOutput ? SaveOptions.DisableFormatting : SaveOptions.None;
                 if (stream.CanSeek && stream.CanWrite)
                 {
                     stream.Seek(0, SeekOrigin.Begin);
-                    root.Save(stream, SaveOptions);
+                    root.Save(stream, saveOptions);
                     stream.SetLength(stream.Position);
                     stream.Flush();
                 }
                 else
                 {
                     stream.Close();
-                    root.Save(inputName, SaveOptions);
+                    root.Save(inputName, saveOptions);
                 }
             }
-            WriteLine(Console.Out, ConsoleColor.Green, $"[ OK ] {inputName}", plusOK: true);
+            WriteLine(Console.Out, ConsoleColor.Green,
+                $"[ OK ] {inputName}", plusOK: true);
         }
 
         private static void WriteLine(TextWriter textWriter,
@@ -337,7 +341,8 @@ namespace FormatStringResource
         {
             if (args.Length == 0 && !Console.IsInputRedirected)
             {
-                WriteAndExit(ExitCode.ParseError, $"no input file{Environment.NewLine}use --help to get usage");
+                WriteAndExit(ExitCode.ParseError,
+                    $"no input file{Environment.NewLine}use --help to get usage");
                 return;
             }
             var logFile = "";
@@ -361,7 +366,7 @@ namespace FormatStringResource
 
                     if (arg == "--help")
                     {
-                        WriteAndExit(ExitCode.Success, $"{GetVersionText()}{Environment.NewLine}{GetUsageText()}");
+                        WriteAndExit(ExitCode.Success, GetUsageText());
                         return;
                     }
 
@@ -386,7 +391,7 @@ namespace FormatStringResource
 
                     if (arg == "--no-format")
                     {
-                        SaveOptions = SaveOptions.DisableFormatting;
+                        NoFormatOutput = true;
                         continue;
                     }
 
@@ -430,7 +435,8 @@ namespace FormatStringResource
                         var listfilename = FormatFilename(args[i]);
                         if (!File.Exists(listfilename))
                         {
-                            WriteAndExit(ExitCode.ParseError, $"list file {listfilename} not existed");
+                            WriteAndExit(ExitCode.ParseError,
+                                $"list file {listfilename} not existed");
                             return;
                         }
                         listFiles.Add(listfilename);
@@ -441,13 +447,6 @@ namespace FormatStringResource
                         arg == "-L")
                     {
                         listFromPipe = true;
-                        continue;
-                    }
-
-                    if (arg == "--ignore-header" ||
-                        arg == "-i")
-                    {
-                        IgnoreHeader = true;
                         continue;
                     }
 
@@ -502,12 +501,14 @@ namespace FormatStringResource
                         var listFileInfo = new FileInfo(listfile);
                         if (!listFileInfo.Exists)
                         {
-                            WriteAndExit(ExitCode.FilesNotExist, $"the list file not existed: {listFileInfo.FullName}");
+                            WriteAndExit(ExitCode.FilesNotExist,
+                                $"the list file not existed: {listFileInfo.FullName}");
                             return;
                         }
                         if (listFileInfo.Length >= GB)
                         {
-                            WriteLine(Console.Out, ConsoleColor.Yellow, $"[WARN] The list file so huge: {listFileInfo.FullName}: {listFileInfo.Length:N0} bytes");
+                            WriteLine(Console.Out, ConsoleColor.Yellow,
+                                $"[WARN] The list file so huge: {listFileInfo.FullName}: {listFileInfo.Length:N0} bytes");
                         }
                         var inputlines = File.ReadLines(listFileInfo.FullName);
                         var lines = inputlines.AsParallel().Where(
@@ -606,36 +607,31 @@ namespace FormatStringResource
         private static string GetUsageText()
         {
             var main = AppDomain.CurrentDomain.FriendlyName;
-            var usage = $@"Usage:
-    {main} [options] [--] <StringResource.xml files>
-    {main} [options] --list <listfile>
+            var usage = $@"usage: {main} [option] [--] <xmlfiles>
+       {main} [option] --list <listfile>
 
-    options
-            --append-log     append log file if --log enabled
-            --dry-run        only run, no save result to file.
-                             recommend use --dry-run with --log or --verbose
-        -i, --ignore-header  ignore xml header
-                             default only supports xml version 1.0,
-                             this argument will force ignore xml header,
-                             and reformats to version 1.0
-            --list <file>    load a StringResource.xml paths list from a file.
-                             in this file, line head with ""#"" will be skipped
-        -L, --list-pipe      load a list from stdin pipe.
-                             if has a stdin pipe and no --list-pipe,
-                             it will be considered the content of a StringResource.xml,
-                             you have to use --verbose or --log to get the results.
-        -l, --log <file>     output and overwrite the log file
-            --no-backup      don't backup origin file.
-                             default will backup origin file to *.bak, 
-                             if *.bak existed and *.bak~ is not existed,
-                             the *.bak will be rename to *.bak~ before.
-            --no-format      don't format output file
-        -v, --verbose        output verbose information
-            --version        output version information and exit";
+option
+        --append-log     append log file if --log enabled
+        --dry-run        only run, no save result to file.
+                         recommend use --dry-run with --log or --verbose
+        --list <file>    load a StringResource.xml paths list from a file.
+                         in this file, line head with ""#"" will be skipped
+    -L, --list-pipe      load a list from stdin pipe.
+                         if has a stdin pipe and no --list-pipe,
+                         it will be considered the content of a StringResource.xml,
+                         you have to use --verbose or --log to get the results.
+    -l, --log <file>     output and overwrite the log file
+        --no-backup      don't backup origin file.
+                         default will backup origin file to *.bak, 
+                         if *.bak existed and *.bak~ is not existed,
+                         the *.bak will be rename to *.bak~ before.
+        --no-format      don't format output file
+    -v, --verbose        output verbose information
+        --version        output version information and exit";
 #if DEBUG
             usage += $@"
 
-    DEBUG options
+debug option
         --debug-attach [seconds]  wait debugger attach";
 #endif
             return usage;
@@ -644,12 +640,15 @@ namespace FormatStringResource
         private static string GetVersionText()
         {
             var assembly = Assembly.GetExecutingAssembly();
-            return string.Format("{0} v{1}{2}{3}",
+            var version = string.Format("{1} v{2}{0}{3}",
+                Environment.NewLine,
                 AppDomain.CurrentDomain.FriendlyName,
                 assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
-                Environment.NewLine,
-                assembly.GetCustomAttribute<AssemblyDescriptionAttribute>()?.Description
-            );
+                assembly.GetCustomAttribute<AssemblyDescriptionAttribute>()?.Description);
+#if DEBUG
+            version += $"{Environment.NewLine}{assembly.GetCustomAttribute<AssemblyCompanyAttribute>()?.Company}";
+#endif
+            return version;
         }
 
         private static void WriteAndExit(ExitCode exitCode, string appendText = "")
@@ -663,13 +662,16 @@ namespace FormatStringResource
                     }
                     break;
                 case ExitCode.ParseError:
-                    WriteLine(Console.Error, DefaultForegroundColor, $"ERROR: arguments error{Environment.NewLine}{appendText}");
+                    WriteLine(Console.Error, DefaultForegroundColor,
+                        $"ERROR: arguments error{Environment.NewLine}{appendText}");
                     break;
                 case ExitCode.FilesNotExist:
-                    WriteLine(Console.Error, DefaultForegroundColor, $"ERROR: Files not exist{Environment.NewLine}{appendText}");
+                    WriteLine(Console.Error, DefaultForegroundColor,
+                        $"ERROR: Files not exist{Environment.NewLine}{appendText}");
                     break;
                 case ExitCode.LoadXmlError:
-                    WriteLine(Console.Error, DefaultForegroundColor, $"ERROR: load xml error{Environment.NewLine}{appendText}");
+                    WriteLine(Console.Error, DefaultForegroundColor,
+                        $"ERROR: load xml error{Environment.NewLine}{appendText}");
                     break;
                 default:
                     if (!string.IsNullOrEmpty(appendText))

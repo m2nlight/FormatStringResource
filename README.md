@@ -4,7 +4,7 @@ Format StringResource.xml files
 
 ## Environment
 
-- dotnet 3 (preview 7 and later)
+- [dotnet core 3 (preview 7 and later)](https://dotnet.microsoft.com/download/dotnet-core/3.0)
 - Windows/Linux/macOS
 
 ## Build
@@ -12,11 +12,11 @@ Format StringResource.xml files
 Run `publish.sh` will make win-x64, linux-x64 and osx-x64 executable file in
 `publish` folder.
 
-If you working on Windows and installed git-bash, the `publish.sh` can be run.
+If you working on Windows and installed [git-bash](https://git-scm.com/download/win), the `publish.sh` can be run.
 
 ## Run
 
-__Windows__
+### Windows
 
 ```text
 C:\> FormatStringResource.exe --log 1.log StringResource.xml
@@ -32,7 +32,7 @@ C:\> FormatStringResource.exe --log 1.log --list listfile.txt
 C:\> type listfile.txt | FormatStringResource.exe --log 1.log -L
 ```
 
-__MacOS/Linux__
+### macOS/Linux
 
 ```text
 ./FormatStringResource --log 1.log StringResource.xml
