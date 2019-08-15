@@ -2,10 +2,11 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp3.0</TargetFramework>
+    <Copyright>MIT</Copyright>
+    <Version>1.0.1-rc.1</Version>
     <Authors>m2nlight</Authors>
-    <Version>1.0.1-beta.3</Version>
+    <Company></Company>
     <Description>Format StringResource.xml files</Description>
-    <PublishTrimmed>true</PublishTrimmed>
     <LangVersion>8.0</LangVersion>
     <NullableContextOptions>enable</NullableContextOptions>
     <IsWindows Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Windows)))' == 'true'">true</IsWindows>
@@ -21,4 +22,12 @@
   <PropertyGroup Condition="'$(IsLinux)'=='true'">
     <DefineConstants>LINUX</DefineConstants>
   </PropertyGroup>
+  <PropertyGroup Condition="$(DefineConstants.Contains(AOT))">
+    <IlcOptimizationPreference>Size</IlcOptimizationPreference>
+    <IlcGenerateCompleteTypeMetadata>false</IlcGenerateCompleteTypeMetadata>
+    <IlcGenerateStackTraceData>false</IlcGenerateStackTraceData>
+  </PropertyGroup>
+  <ItemGroup Condition="$(DefineConstants.Contains(AOT))">
+    <PackageReference Include="Microsoft.DotNet.ILCompiler" Version="1.0.0-alpha-*" />
+  </ItemGroup>
 </Project>

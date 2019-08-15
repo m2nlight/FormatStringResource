@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -121,61 +122,76 @@ namespace FormatStringResource
             const string xmlHeadEnd = "?>";
             using var reader = new StreamReader(stream);
             var chars = new char[512];
-            var readNum = reader.Read(chars, 0, chars.Length);
+            var readNum = reader.ReadBlock(chars, 0, chars.Length);
             if (readNum <= 0)
             {
                 throw new Exception("content is empty");
             }
-            var span = new ReadOnlySpan<char>(chars, 0, readNum);
-            if (!span.StartsWith(xmlHead))
+            var buffer = chars.AsSpan(0, readNum);
+            if (!buffer.StartsWith(xmlHead))
             {
                 throw new Exception("invalid xml format");
             }
             // skip xml description
-            var foundIndex = span[xmlHead.Length..].IndexOf(xmlHeadEnd);
-            if (foundIndex <= 0)
+            var foundIndex = buffer[xmlHead.Length..].IndexOf(xmlHeadEnd);
+            if (foundIndex < 0)
             {
                 throw new Exception("invalid xml format");
             }
-            var startIndex = xmlHead.Length + foundIndex + 2;
+            var startIndex = xmlHead.Length + foundIndex + xmlHeadEnd.Length;
             // load content
             var capacity = 0;
             if (stream.CanSeek)
             {
                 var remainLength = stream.Length - startIndex;
-                if (remainLength < int.MaxValue)
+                if (remainLength <= int.MaxValue)
                 {
                     capacity = (int)remainLength;
                 }
             }
             var sb = capacity > 0 ? new StringBuilder(capacity) : new StringBuilder();
-            sb.Append(chars, startIndex, span.Length - startIndex);
+            sb.Append(chars, startIndex, buffer.Length - startIndex);
             sb.Append(reader.ReadToEnd());
             // parse content
             var loadOptions = NoFormatOutput ? LoadOptions.PreserveWhitespace : LoadOptions.None;
             var root = XElement.Parse(sb.ToString(), loadOptions);
             var q = from item in root.Descendants("Item")
-                    let node = item as XNode
-                    let id = (string)item.Attribute("id")
-                    let text = (string)item.Attribute("text")
-                    where item != null && id != null
-                    group new { text, node } by id into g
+                    let idAttr = item.Attribute("id")
+                    where idAttr != null
+                    let text = item.Attribute("text")?.ToString()
+                    group new NodeItem(text, item) by (string)idAttr into g
                     where g.Count() > 1
                     select g;
             foreach (var g in q)
             {
                 var array = g.ToArray();
+                // find last text is not null for keeping
+                if (array[^1].Text == null)
+                {
+                    for (int i = array.Length - 2; i >= 0; i--)
+                    {
+                        ref var current = ref array[i];
+                        if (current.Text != null)
+                        {
+                            // the last item will be kept
+                            (current, array[^1]) = (array[^1], current);
+                            break;
+                        }
+                    }
+                }
+                // remove invalid or duplicate items
                 for (int i = 0; i < array.Length - 1; i++)
                 {
+                    var (text, item) = array[i];
                     WriteLine(Console.Out,
-                       ConsoleColor.Yellow,
-                       $"{inputName} - Removing duplicate item: id: {g.Key} text: {array[i].text}",
-                       onlyLogfile: !PrintVerbose);
-                    array[i].node.Remove();
+                        ConsoleColor.Yellow,
+                        $"{inputName} -  Removed Item: id: {g.Key} {getTextDesc(text)}",
+                        onlyLogfile: !PrintVerbose);
+                    item.Remove();
                 }
                 WriteLine(Console.Out,
-                   ConsoleColor.Yellow,
-                   $"{inputName} -               Keep item: id: {g.Key} text: {array[array.Length - 1].text}",
+                        ConsoleColor.Yellow,
+                        $"{inputName} - Reserved Item: id: {g.Key} {getTextDesc(array[^1].Text)}",
                    onlyLogfile: !PrintVerbose);
             }
             // file operations
@@ -210,6 +226,10 @@ namespace FormatStringResource
             }
             WriteLine(Console.Out, ConsoleColor.Green,
                 $"[ OK ] {inputName}", plusOK: true);
+
+            return;
+            static string getTextDesc(string text) =>
+                text == null ? "the text is null" : $"text: {text}";
         }
 
         private static void WriteLine(TextWriter textWriter,
@@ -646,7 +666,7 @@ debug option
                 assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
                 assembly.GetCustomAttribute<AssemblyDescriptionAttribute>()?.Description);
 #if DEBUG
-            version += $"{Environment.NewLine}{assembly.GetCustomAttribute<AssemblyCompanyAttribute>()?.Company}";
+            version += $"{Environment.NewLine}Written by {assembly.GetCustomAttribute<AssemblyCompanyAttribute>()?.Company}";
 #endif
             return version;
         }
@@ -710,5 +730,19 @@ debug option
         ParseError,
         FilesNotExist,
         LoadXmlError
+    }
+
+
+    internal class NodeItem
+    {
+        [AllowNull]
+        public string Text { get; }
+        [DisallowNull]
+        public XElement Item { get; }
+        public NodeItem(string text, XElement item)
+            => (Text, Item) = (text, item);
+        public void Deconstruct(out string text, out XElement item)
+            => (text, item) = (Text, Item);
+#nullable disable
     }
 }
