@@ -127,13 +127,13 @@ namespace FormatStringResource
             {
                 throw new Exception("content is empty");
             }
-            var buffer = chars.AsSpan(0, readNum);
-            if (!buffer.StartsWith(xmlHead))
+            var span = new ReadOnlySpan<char>(chars, 0, readNum);
+            if (!span.StartsWith(xmlHead))
             {
                 throw new Exception("invalid xml format");
             }
             // skip xml description
-            var foundIndex = buffer[xmlHead.Length..].IndexOf(xmlHeadEnd);
+            var foundIndex = span[xmlHead.Length..].IndexOf(xmlHeadEnd);
             if (foundIndex < 0)
             {
                 throw new Exception("invalid xml format");
@@ -143,14 +143,20 @@ namespace FormatStringResource
             var capacity = 0;
             if (stream.CanSeek)
             {
-                var remainLength = stream.Length - startIndex;
+                var length = stream.Length;
+                if (length > GB)
+                {
+                    WriteLine(Console.Out, ConsoleColor.Yellow,
+                        $"[WARN] The content so huge: {inputName}: {length:N0} bytes");
+                }
+                var remainLength = length - startIndex;
                 if (remainLength <= int.MaxValue)
                 {
                     capacity = (int)remainLength;
                 }
             }
             var sb = capacity > 0 ? new StringBuilder(capacity) : new StringBuilder();
-            sb.Append(chars, startIndex, buffer.Length - startIndex);
+            sb.Append(chars, startIndex, span.Length - startIndex);
             sb.Append(reader.ReadToEnd());
             // parse content
             var loadOptions = NoFormatOutput ? LoadOptions.PreserveWhitespace : LoadOptions.None;
@@ -166,7 +172,8 @@ namespace FormatStringResource
             {
                 var array = g.ToArray();
                 // find last text is not null for keeping
-                if (array[^1].Text == null)
+                var lastIdx = ^1;
+                if (array[lastIdx].Text == null)
                 {
                     for (int i = array.Length - 2; i >= 0; i--)
                     {
@@ -174,7 +181,7 @@ namespace FormatStringResource
                         if (current.Text != null)
                         {
                             // the last item will be kept
-                            (current, array[^1]) = (array[^1], current);
+                            (current, array[lastIdx]) = (array[lastIdx], current);
                             break;
                         }
                     }
@@ -191,7 +198,7 @@ namespace FormatStringResource
                 }
                 WriteLine(Console.Out,
                         ConsoleColor.Yellow,
-                        $"{inputName} - Reserved Item: id: {g.Key} {getTextDesc(array[^1].Text)}",
+                        $"{inputName} - Reserved Item: id: {g.Key} {getTextDesc(array[lastIdx].Text)}",
                    onlyLogfile: !PrintVerbose);
             }
             // file operations
@@ -743,6 +750,5 @@ debug option
             => (Text, Item) = (text, item);
         public void Deconstruct(out string text, out XElement item)
             => (text, item) = (Text, Item);
-#nullable disable
     }
 }

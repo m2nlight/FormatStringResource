@@ -8,15 +8,28 @@ echo publish args: https://docs.microsoft.com/en-us/dotnet/core/tools/dotnet-pub
 array=( win-x64 linux-x64 osx-x64 )
 config='Release'
 output='publish'
+declare -i r2r=0
 declare -i aot=0
+declare -i noRmOut=0
 until [ $# -eq 0 ]; do
 	case "$1" in
+	--help)
+		printf "\nusage: bash ${0##*/} [--r2r | --aot] [--no-rm-output]\n\n"
+		exit 0
+		;;
 	--aot)
 		aot=1
 		printf '\n\033[1;32m'AOT-BUILD'\033[0m\n\n'
 		;;
+	--r2r)
+		r2r=1
+		printf '\n\033[1;32m'R2R-BUILD'\033[0m\n\n'
+		;;
+	--no-rm-output)
+		noRmOut=1
+		;;
 	*)
-		printf "ERROR: arguments error\nusage: bash ${0##*/} [--aot]\n"
+		printf "\nERROR: arguments error\nplease run \"bash ${0##*/} --help\" to get usage\n\n"
 		exit 1
 		;;
 	esac
@@ -26,7 +39,7 @@ declare -i count=${#array[*]}
 declare -i num=1
 # cleanup
 printf '>>> \033[1;36mClean output folders ...\033[0m\n\n'
-[[ $aot -eq 0 && -d "$output" ]] && rm -rf $output
+[[ $noRmOut -eq 0 && -d "$output" ]] && rm -rf $output
 find . -type d \( -iname 'bin' -o -iname 'obj' \) | xargs rm -rf
 printf '\033[1;36mOK\033[0m\n'
 # build
@@ -35,7 +48,9 @@ for runtime in "${array[@]}"; do
 	printf "\033[1mdotnet restore -r $runtime ...\033[0m\n"
 	dotnet restore -r $runtime
 	if [ $aot -eq 1 ]; then
-		pubArgs="-p:DefineConstants=\"AOT\""
+		pubArgs="-p:DefineConstants=\"AOT\""		
+	elif [ $r2r -eq 1 ]; then
+		pubArgs="-p:PublishSingleFile=true -p:PublishTrimmed=true -o $output/$runtime/r2r -p:DefineConstants=\"R2R\""
 	else
 		pubArgs="-p:PublishSingleFile=true -p:PublishTrimmed=true -o $output/$runtime"
 	fi

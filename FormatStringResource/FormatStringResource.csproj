@@ -3,7 +3,7 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp3.0</TargetFramework>
     <Copyright>MIT</Copyright>
-    <Version>1.0.1-rc.1</Version>
+    <Version>1.0.1-rc.2</Version>
     <Authors>m2nlight</Authors>
     <Company></Company>
     <Description>Format StringResource.xml files</Description>
@@ -22,6 +22,14 @@
   <PropertyGroup Condition="'$(IsLinux)'=='true'">
     <DefineConstants>LINUX</DefineConstants>
   </PropertyGroup>
+  <!-- R2R -->
+  <PropertyGroup Condition="$(DefineConstants.Contains(R2R))">
+    <PublishReadyToRun>true</PublishReadyToRun>
+  </PropertyGroup>
+  <!--<ItemGroup Condition="$(DefineConstants.Contains(R2R))">
+    <PublishReadyToRunExclude Include="FilenameOfAssemblyToExclude.dll" />
+  </ItemGroup>-->
+  <!-- AOT -->
   <PropertyGroup Condition="$(DefineConstants.Contains(AOT))">
     <IlcOptimizationPreference>Size</IlcOptimizationPreference>
     <IlcGenerateCompleteTypeMetadata>false</IlcGenerateCompleteTypeMetadata>
