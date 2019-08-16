@@ -147,7 +147,7 @@ namespace FormatStringResource
                 if (length > GB)
                 {
                     WriteLine(Console.Out, ConsoleColor.Yellow,
-                        $"[WARN] The content so huge: {inputName}: {length:N0} bytes");
+                        $"[WARN] The content is so big: {inputName}: {length:N0} bytes");
                 }
                 var remainLength = length - startIndex;
                 if (remainLength <= int.MaxValue)
@@ -190,11 +190,11 @@ namespace FormatStringResource
                 for (int i = 0; i < array.Length - 1; i++)
                 {
                     var (text, item) = array[i];
+                    item.Remove();
                     WriteLine(Console.Out,
                         ConsoleColor.Yellow,
                         $"{inputName} -  Removed Item: id: {g.Key} {getTextDesc(text)}",
                         onlyLogfile: !PrintVerbose);
-                    item.Remove();
                 }
                 WriteLine(Console.Out,
                         ConsoleColor.Yellow,
@@ -463,7 +463,7 @@ namespace FormatStringResource
                         if (!File.Exists(listfilename))
                         {
                             WriteAndExit(ExitCode.ParseError,
-                                $"list file {listfilename} not existed");
+                                $"list file {listfilename} not found");
                             return;
                         }
                         listFiles.Add(listfilename);
@@ -529,13 +529,13 @@ namespace FormatStringResource
                         if (!listFileInfo.Exists)
                         {
                             WriteAndExit(ExitCode.FilesNotExist,
-                                $"the list file not existed: {listFileInfo.FullName}");
+                                $"the list file not found: {listFileInfo.FullName}");
                             return;
                         }
                         if (listFileInfo.Length >= GB)
                         {
                             WriteLine(Console.Out, ConsoleColor.Yellow,
-                                $"[WARN] The list file so huge: {listFileInfo.FullName}: {listFileInfo.Length:N0} bytes");
+                                $"[WARN] The list file is so big: {listFileInfo.FullName}: {listFileInfo.Length:N0} bytes");
                         }
                         var inputlines = File.ReadLines(listFileInfo.FullName);
                         var lines = inputlines.AsParallel().Where(
