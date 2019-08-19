@@ -5,6 +5,7 @@ set +x +e
 echo dotnet-core-3.0: https://docs.microsoft.com/en-us/dotnet/core/whats-new/dotnet-core-3-0
 echo runtime array: https://docs.microsoft.com/en-us/dotnet/core/rid-catalog
 echo publish args: https://docs.microsoft.com/en-us/dotnet/core/tools/dotnet-publish
+csproj=FormatStringResource/FormatStringResource.csproj
 array=( win-x64 linux-x64 osx-x64 )
 config='Release'
 output='publish'
@@ -42,11 +43,12 @@ printf '>>> \033[1;36mClean output folders ...\033[0m\n\n'
 [[ $noRmOut -eq 0 && -d "$output" ]] && rm -rf $output
 find . -type d \( -iname 'bin' -o -iname 'obj' \) | xargs rm -rf
 printf '\033[1;36mOK\033[0m\n'
+##dotnet clean
 # build
 for runtime in "${array[@]}"; do
 	printf "\n>>> \033[1;36m($num/$count) Building $runtime ...\033[0m\n\n"
-	printf "\033[1mdotnet restore -r $runtime ...\033[0m\n"
-	dotnet restore -r $runtime
+	printf "\033[1mdotnet restore --configfile nuget.config -r $runtime $csproj ...\033[0m\n"
+	dotnet restore --configfile nuget.config -r $runtime $csproj
 	if [ $aot -eq 1 ]; then
 		pubArgs="-p:DefineConstants=\"AOT\""		
 	elif [ $r2r -eq 1 ]; then
@@ -54,8 +56,8 @@ for runtime in "${array[@]}"; do
 	else
 		pubArgs="-p:PublishSingleFile=true -p:PublishTrimmed=true -o $output/$runtime"
 	fi
-	printf "\033[1mdotnet publish -r $runtime -c $config $pubArgs ...\033[0m\n"
-	dotnet publish -r $runtime -c $config $pubArgs
+	printf "\033[1mdotnet publish -r $runtime -c $config $pubArgs $csproj ...\033[0m\n"
+	dotnet publish -r $runtime -c $config $pubArgs $csproj
 	ret=$?
 	if [ $ret -eq 0 ]; then
 		printf '\n\033[1;32m'SUCCESS'\033[0m\n'

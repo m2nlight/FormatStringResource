@@ -18,6 +18,10 @@ Format StringResource.xml files
 
 If you working on Windows and installed [git-bash](https://git-scm.com/download/win), the `publish.sh` can be run.
 
+### UnitTest
+
+Call `test.sh` will run a unit test.
+
 ## Run
 
 ### Windows

@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -13,19 +12,19 @@ using System.Xml.Linq;
 
 namespace FormatStringResource
 {
-    internal class Program
+    public class Program
     {
         private static ConsoleColor DefaultForegroundColor;
         private static readonly object SyncLock = new object();
         private static readonly string StdinPipeName = "<Stdin Pipe>";
         private static readonly int PrintFileNotExistCount = 10;
-        private static string[] InputFiles;
+        private static string[]? InputFiles;
         private static bool HasStdinInput;
         private static bool PrintVerbose;
         private static bool Backup = true;
         private static bool NoFormatOutput;
         private static bool DryRun;
-        private static TextWriter Logfile;
+        private static TextWriter? Logfile;
         private static int OKCount;
         private static int FailCount;
         private static long CostCount;
@@ -42,6 +41,18 @@ namespace FormatStringResource
             FormatFiles();
             PrintCount();
             WriteAndExit(ExitCode.Success);
+        }
+
+        /// <summary>
+        /// Unit test will call this entry
+        /// </summary>
+        /// <param name="args">like main args</param>
+        [Conditional("DEBUG")]
+        public static void Test(string[] args)
+        {
+            ParseArgs(args);
+            FormatFiles();
+            PrintCount();
         }
 
         private static void RegisterExitProcessing()
@@ -130,13 +141,13 @@ namespace FormatStringResource
             var span = new ReadOnlySpan<char>(chars, 0, readNum);
             if (!span.StartsWith(xmlHead))
             {
-                throw new Exception("invalid xml format");
+                throw new Exception("invalid XML format");
             }
-            // skip xml description
+            // skip XML description
             var foundIndex = span[xmlHead.Length..].IndexOf(xmlHeadEnd);
             if (foundIndex < 0)
             {
-                throw new Exception("invalid xml format");
+                throw new Exception("invalid XML format");
             }
             var startIndex = xmlHead.Length + foundIndex + xmlHeadEnd.Length;
             // load content
@@ -235,7 +246,7 @@ namespace FormatStringResource
                 $"[ OK ] {inputName}", plusOK: true);
 
             return;
-            static string getTextDesc(string text) =>
+            static string getTextDesc(string? text) =>
                 text == null ? "the text is null" : $"text: {text}";
         }
 
@@ -316,7 +327,7 @@ namespace FormatStringResource
                 Console.ForegroundColor = ConsoleColor.Yellow;
                 if (!Console.IsInputRedirected && attachTimeout < 0)
                 {
-                    Console.WriteLine("DEBUG MODE: Waitting for debugger attach, press any key to continue...");
+                    Console.WriteLine("DEBUG MODE: Waiting for debugger attach, press any key to continue...");
                     Console.ReadKey(true);
                 }
                 else
@@ -343,7 +354,7 @@ namespace FormatStringResource
                         var sec = attachTimeout - i;
                         if (canCursorMove)
                         {
-                            Console.Write($"DEBUG MODE: Waitting {sec:N0}s for debugger attach...");
+                            Console.Write($"DEBUG MODE: Waiting {sec:N0}s for debugger attach...");
                             if (sec > 1)
                             {
                                 Console.CursorLeft = 0;
@@ -355,7 +366,7 @@ namespace FormatStringResource
                         }
                         else
                         {
-                            Console.WriteLine($"DEBUG MODE: Waitting {sec:N0}s for debugger attach...");
+                            Console.WriteLine($"DEBUG MODE: Waiting {sec:N0}s for debugger attach...");
                         }
                         Thread.Sleep(1000);
                     }
@@ -698,7 +709,7 @@ debug option
                     break;
                 case ExitCode.LoadXmlError:
                     WriteLine(Console.Error, DefaultForegroundColor,
-                        $"ERROR: load xml error{Environment.NewLine}{appendText}");
+                        $"ERROR: load XML error{Environment.NewLine}{appendText}");
                     break;
                 default:
                     if (!string.IsNullOrEmpty(appendText))
@@ -742,13 +753,11 @@ debug option
 
     internal class NodeItem
     {
-        [AllowNull]
-        public string Text { get; }
-        [DisallowNull]
+        public string? Text { get; }
         public XElement Item { get; }
         public NodeItem(string text, XElement item)
             => (Text, Item) = (text, item);
-        public void Deconstruct(out string text, out XElement item)
+        public void Deconstruct(out string? text, out XElement item)
             => (text, item) = (Text, Item);
     }
 }
