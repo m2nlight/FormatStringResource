@@ -11,16 +11,16 @@ Format StringResource.xml files
 
 - Run `publish.sh` will make win-x64, linux-x64 and osx-x64 executable file in
 `publish` folder.
-- Run `publish_R2R.sh` will try to make with ReadyToRun executable file in
+- Run `publish_R2R.sh` will try to make ReadyToRun executable file in
 `publish/$runtime/r2r` folder.
-- Run `publish_AOT.sh` will try to make with AOT executable file in
+- Run `publish_AOT.sh` will try to make AOT executable file in
 `FormatStringResource/bin/Release/netcoreapp3.0/$runtime/native` folder.
 
 If you working on Windows and installed [git-bash](https://git-scm.com/download/win), the `publish.sh` can be run.
 
 ### UnitTest
 
-Call `test.sh` will run a unit test.
+Call `test.sh` will run unit test and output coverage.
 
 ## Run
 

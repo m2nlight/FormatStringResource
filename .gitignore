@@ -3,4 +3,5 @@
 bin/
 obj/
 publish/
-
+TestResults/
+coverage.json
