@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -12,7 +13,7 @@ using System.Xml.Linq;
 
 namespace FormatStringResource
 {
-    public class Program
+    public static class Program
     {
         private static ConsoleColor DefaultForegroundColor;
         private static readonly object SyncLock = new object();
@@ -33,6 +34,7 @@ namespace FormatStringResource
         // DEBUG members
         private const int DefaultAttachTimeout = 10;
 
+        [ExcludeFromCodeCoverage]
         private static void Main(string[] args)
         {
             RegisterExitProcessing();
@@ -55,6 +57,7 @@ namespace FormatStringResource
             PrintCount();
         }
 
+        [ExcludeFromCodeCoverage]
         private static void RegisterExitProcessing()
         {
             DefaultForegroundColor = Console.ForegroundColor;
@@ -136,18 +139,18 @@ namespace FormatStringResource
             var readNum = reader.ReadBlock(chars, 0, chars.Length);
             if (readNum <= 0)
             {
-                throw new Exception("content is empty");
+                throw new FormatException("content is empty");
             }
             var span = new ReadOnlySpan<char>(chars, 0, readNum);
             if (!span.StartsWith(xmlHead))
             {
-                throw new Exception("invalid XML format");
+                throw new FormatException("invalid XML format");
             }
             // skip XML description
             var foundIndex = span[xmlHead.Length..].IndexOf(xmlHeadEnd);
             if (foundIndex < 0)
             {
-                throw new Exception("invalid XML format");
+                throw new FormatException("invalid XML format");
             }
             var startIndex = xmlHead.Length + foundIndex + xmlHeadEnd.Length;
             // load content
@@ -279,6 +282,7 @@ namespace FormatStringResource
             }
         }
 
+        [ExcludeFromCodeCoverage]
         [Conditional("DEBUG")]
         private static void ParseDebugArgs(ref string[] args)
         {
@@ -295,18 +299,10 @@ namespace FormatStringResource
                 if (arg == "--debug-attach")
                 {
                     attachTimeout = -1;
-                    if (i + 1 < args.Length)
+                    if (i + 1 < args.Length && int.TryParse(args[i + 1], out var result))
                     {
-                        var next = args[i + 1];
-                        if (next[0] >= 0x30 && next[0] <= 0x39)
-                        {
-                            try
-                            {
-                                attachTimeout = Convert.ToInt32(next);
-                                i++;
-                            }
-                            catch { }
-                        }
+                        attachTimeout = result;
+                        i++;
                     }
                     continue;
                 }
@@ -516,7 +512,7 @@ namespace FormatStringResource
             {
                 try
                 {
-                    var fileMode = apppendLog ? FileMode.OpenOrCreate | FileMode.Append : FileMode.Create;
+                    var fileMode = apppendLog ? FileMode.Append : FileMode.Create;
                     Logfile = new StreamWriter(File.Open(logFile, fileMode, FileAccess.Write, FileShare.Read));
                     if (apppendLog)
                     {
@@ -632,7 +628,7 @@ namespace FormatStringResource
         private static string FormatFilename(string input)
         {
 #if WINDOWS
-            if (input.IndexOf("://") > 0)
+            if (input.IndexOf("://") >= 0)
             {
                 return input;
             }
