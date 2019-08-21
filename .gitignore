@@ -5,3 +5,5 @@ obj/
 publish/
 TestResults/
 coverage.json
+coverage.opencover.xml
+.sonarqube/
