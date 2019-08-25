@@ -3,7 +3,7 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp3.0</TargetFramework>
     <Copyright>Copyright (c) 2019 m2nlight</Copyright>
-    <Version>1.0.1-rc.5</Version>
+    <Version>1.0.1-rc.6</Version>
     <Authors>m2nlight</Authors>
     <Company></Company>
     <Description>Format StringResource.xml files</Description>

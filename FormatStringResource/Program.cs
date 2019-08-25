@@ -31,8 +31,12 @@ namespace FormatStringResource
         private static long CostCount;
         private const double GB = 1 << (10 * 3);
 
+#if DEBUG
         // DEBUG members
         private const int DefaultAttachTimeout = 10;
+        private static bool IsUnitTest;
+        private static bool HasExited;
+#endif
 
         [ExcludeFromCodeCoverage]
         private static void Main(string[] args)
@@ -45,17 +49,42 @@ namespace FormatStringResource
             WriteAndExit(ExitCode.Success);
         }
 
+#if DEBUG
         /// <summary>
         /// Unit test will call this entry
         /// </summary>
         /// <param name="args">like main args</param>
-        [Conditional("DEBUG")]
+        [ExcludeFromCodeCoverage]
         public static void Test(string[] args)
         {
+            IsUnitTest = true;
+
+            InputFiles = null;
+            HasStdinInput = false;
+            PrintVerbose = false;
+            Backup = true;
+            NoFormatOutput = false;
+            DryRun = false;
+            Logfile = null;
+            OKCount = 0;
+            FailCount = 0;
+            CostCount = 0;
+
             ParseArgs(args);
+            if (HasExited)
+            {
+                return;
+            }
+
             FormatFiles();
+            if (HasExited)
+            {
+                return;
+            }
+
             PrintCount();
         }
+#endif
 
         [ExcludeFromCodeCoverage]
         private static void RegisterExitProcessing()
@@ -90,7 +119,10 @@ namespace FormatStringResource
             }
             var stopWatch = new Stopwatch();
             stopWatch.Start();
-            Parallel.ForEach(InputFiles, filename => FormatFile(filename));
+            if (InputFiles != null)
+            {
+                Parallel.ForEach(InputFiles, filename => FormatFile(filename));
+            }
             FormatStdin();
             stopWatch.Stop();
             CostCount = stopWatch.ElapsedMilliseconds;
@@ -330,7 +362,9 @@ namespace FormatStringResource
                 {
                     if (attachTimeout < 0)
                     {
+#if DEBUG
                         attachTimeout = DefaultAttachTimeout;
+#endif
                     }
 
                     var canCursorMove = true;
@@ -602,6 +636,12 @@ namespace FormatStringResource
                 {
                     HasStdinInput = true;
                 }
+#if DEBUG
+                if (IsUnitTest)
+                {
+                    HasStdinInput = false;
+                }
+#endif
             }
             if (filesNotExist.Count > 0)
             {
@@ -638,6 +678,7 @@ namespace FormatStringResource
 #endif
         }
 
+        [ExcludeFromCodeCoverage]
         private static string GetUsageText()
         {
             var main = AppDomain.CurrentDomain.FriendlyName;
@@ -671,6 +712,7 @@ debug option
             return usage;
         }
 
+        [ExcludeFromCodeCoverage]
         private static string GetVersionText()
         {
             var assembly = Assembly.GetExecutingAssembly();
@@ -719,13 +761,24 @@ debug option
             {
                 Logfile.Close();
             }
+#if DEBUG
+            if (IsUnitTest)
+            {
+                Console.WriteLine($"ExitCode: {(int)exitCode}");
+                HasExited = true;
+                return;
+            }
+#endif
             Environment.Exit((int)exitCode);
         }
 
 #if WINDOWS
+        [ExcludeFromCodeCoverage]
         [System.Runtime.InteropServices.DllImport("Kernel32")]
         private static extern bool SetConsoleCtrlHandler(HandlerRoutine handler, bool add);
+
         public delegate bool HandlerRoutine(CtrlTypes CtrlType);
+
         public enum CtrlTypes
         {
             CTRL_C_EVENT = 0,

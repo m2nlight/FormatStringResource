@@ -1,0 +1,62 @@
+# see https://docs.gitlab.com/ce/ci/yaml/README.html for all available options
+
+# Run this ci, your runner (or docker container) need install follow:
+# - dotnet core 3 sdk (this is a dotnet core 3 project)
+# - dotnet core 2 runtime (dotnet-sonarscanner run on dotnet core 2 runtime)
+# - libicu-dev (if you recived a error: Process terminated. Couldn't find a valid ICU package installed on the system. Set the configuration flag System.Globalization.Invariant to true if you want to run with no globalization support.)
+# - openjdk-8-jre (dotnet-sonarscanner requires java runtime)
+# - git-lfs (option)
+# - build-essential (option)
+# example:
+# (1) install a gitlab-runner docker in your linux
+#     docker volume create --name gitlab-runner-config
+#     docker run -d --name gitlab-runner --restart always -v gitlab-runner-config:/etc/gitlab-runner -v /var/run/docker.sock:/var/run/docker.sock gitlab/gitlab-runner:latest
+# (2) register a gitlab-runner to your gitlab (https://docs.gitlab.com/runner/commands/)
+#     docker exec -it gitlab-runner gitlab-ci-multi-runner register
+#     - input gitlab url and token information (get it from gitlab -> project/settings/ci_cd -> Runners)
+#     - tags: linux
+#     - executor: shell
+# (3) install dotnet and build tools into gitlab-runner container
+#     docker exec -it gitlab-runner bash
+#     - install dotnet core 2 runtime and 3 preview 8 sdk
+#       mkdir -p /usr/share/dotnet
+#       curl -O https://download.visualstudio.microsoft.com/download/pr/228832ea-805f-45ab-8c88-fa36165701b9/16ce29a06031eeb09058dee94d6f5330/dotnet-sdk-2.2.401-linux-x64.tar.gz
+#       tar xvzf dotnet-sdk-2.2.401-linux-x64.tar.gz -C /usr/share/dotnet
+#       curl -O https://download.visualstudio.microsoft.com/download/pr/a0e368ac-7161-4bde-a139-1a3ef5a82bbe/439cdbb58950916d3718771c5d986c35/dotnet-sdk-3.0.100-preview8-013656-linux-x64.tar.gz
+#       tar xvzf dotnet-sdk-3.0.100-preview8-013656-linux-x64.tar.gz -C /usr/share/dotnet
+#       rm *.tar.gz
+#       ln -s /usr/share/dotnet/dotnet /usr/bin/dotnet
+#       echo 'export PATH="~/.dotnet/tools:$PATH"' >> ~/.bashrc
+#       echo 'export PATH="$PATH:/home/gitlab-runner/.dotnet/tools"' >> /home/gitlab-runner/.bashrc
+#     - install libicu-dev, openjdk-8-jre and git-lfs
+#       apt update
+#       apt install libicu-dev openjdk-8-jre git-lfs -y
+#     - exit container bash
+#       exit
+# other commands:
+#     - verify:
+#       docker exec -it gitlab-runner gitlab-ci-multi-runner verify
+#     - unregistered:
+#       docker exec -it gitlab-runner gitlab-ci-multi-runner list
+#       docker exec -it gitlab-runner gitlab-ci-multi-runner unregister --name <name>
+#       docker exec -it gitlab-runner gitlab-ci-multi-runner unregister --token <token> --url <url>
+#       docker exec -it gitlab-runner gitlab-ci-multi-runner unregister --all-runners
+#     - view config.toml
+#       docker exec -it gitlab-runner cat /etc/gitlab-runner/config.toml
+# gitlab code coverage regex: Total\s+\|\s+(\d+\.\d+)\%
+#     you can input it in gitlab -> project/settings/ci_cd -> General pipelines -> Test coverage parsing
+#     then add badge in gitlab -> project/edit -> Badges
+
+before_script:
+  - dotnet --list-sdks && dotnet --list-runtimes || echo "Can't found dotnet!"
+  - export PATH="$PATH:$HOME/.dotnet/tools"
+  
+after_script:
+  - echo "Finish"
+   
+test1:
+  tags:
+    - linux
+  stage: test
+  script: 
+    - bash ./sonarscanner.sh "" "" 091e05fd94dd7c6e52ee59e44e4ca444e9edd246

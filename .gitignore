@@ -4,6 +4,6 @@ bin/
 obj/
 publish/
 TestResults/
+.sonarqube/
 coverage.json
 coverage.opencover.xml
-.sonarqube/

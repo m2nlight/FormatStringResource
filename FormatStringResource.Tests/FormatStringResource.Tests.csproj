@@ -24,6 +24,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="listfile.txt">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Update="StringResource.example.out.xml">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
