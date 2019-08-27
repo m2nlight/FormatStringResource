@@ -61,4 +61,5 @@ test1:
   #   - dotnet3sdk
   stage: test
   script: 
-    - bash ./sonarscanner.sh "" "" 091e05fd94dd7c6e52ee59e44e4ca444e9edd246
+  #  - bash ./sonarscanner.sh "" "" 091e05fd94dd7c6e52ee59e44e4ca444e9edd246
+    - bash ./test.sh

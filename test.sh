@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set +x +e
+set -e
 windows() { [[ -n "$WINDIR" ]]; }
 projname=FormatStringResource
 csproj="$projname.Tests/$projname.Tests.csproj"
