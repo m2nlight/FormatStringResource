@@ -29,6 +29,8 @@ printf "\ntip: follow command can update dotnet-sonarscanner:\n  dotnet tool upd
 printf '\n>>> \033[1;36mClean output folders ...\033[0m\n'
 find . -type d \( -iname 'bin' -o -iname 'obj' -o -iname 'TestResults' \) | xargs rm -rf
 printf '\n\033[1;36mOK\033[0m\n'
+#restore and build
+set -e
 printf "\n>>> \033[1mdotnet restore $nugetarg\033[0m\n"
 dotnet restore $nugetarg
 if windows; then
@@ -50,6 +52,9 @@ else
 	dotnet build
 	dotnet sonarscanner $sonarend
 fi
-printf '\n\033[1;36mDone. Press any key to exit...\033[0m'
-read -n1
-printf '\n'
+
+if [ -t 1 ]; then
+	printf '\n\033[1;36mDone. Press any key to exit...\033[0m'
+	read -n1
+	printf '\n'
+fi

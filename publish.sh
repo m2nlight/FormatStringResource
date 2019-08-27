@@ -67,6 +67,8 @@ for runtime in "${array[@]}"; do
 	let num+=1
 done
 # end
-printf "\n\033[1;36mAll done. Press any key to exit...\033[0m"
-read -n1
-printf "\n"
+if [ -t 1 ]; then
+	printf "\n\033[1;36mAll done. Press any key to exit...\033[0m"
+	read -n1
+	printf "\n"
+fi

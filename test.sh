@@ -15,6 +15,9 @@ if windows; then
 else
 	dotnet test $testArgs $csproj
 fi
-printf "\n\033[1;36mDone. Press any key to exit...\033[0m"
-read -n1
-printf "\n"
+
+if [ -t 1 ]; then
+	printf "\n\033[1;36mDone. Press any key to exit...\033[0m"
+	read -n1
+	printf "\n"
+fi

@@ -14,7 +14,7 @@
 # (2) register a gitlab-runner to your gitlab (https://docs.gitlab.com/runner/commands/)
 #     docker exec -it gitlab-runner gitlab-ci-multi-runner register
 #     - input gitlab url and token information (get it from gitlab -> project/settings/ci_cd -> Runners)
-#     - tags: linux
+#     - tags: dotnet3sdk
 #     - executor: shell
 # (3) install dotnet and build tools into gitlab-runner container
 #     docker exec -it gitlab-runner bash
@@ -47,16 +47,18 @@
 #     you can input it in gitlab -> project/settings/ci_cd -> General pipelines -> Test coverage parsing
 #     then add badge in gitlab -> project/edit -> Badges
 
+image: m2nlight/dotnet3sdk
+
 before_script:
   - dotnet --list-sdks && dotnet --list-runtimes || echo "Can't found dotnet!"
-  - export PATH="$PATH:$HOME/.dotnet/tools"
+    #  - export PATH="$PATH:$HOME/.dotnet/tools"
   
 after_script:
   - echo "Finish"
    
 test1:
   tags:
-    - linux
+    - dotnet3sdk
   stage: test
   script: 
     - bash ./sonarscanner.sh "" "" 091e05fd94dd7c6e52ee59e44e4ca444e9edd246

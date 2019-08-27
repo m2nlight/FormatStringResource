@@ -1,0 +1,51 @@
+# INSTALL
+# (1) download tar.gz package
+#     - wget
+# (2) build dotnet core 3 projects
+#     - dotnet core 3.0.100-preview8-013656
+# (3) run dotnet-sonarscanner
+#     - dotnet core 2.2.6 runtime
+#     - which
+#     - java-11-openjdk
+# (4) LFS support
+#     - git
+#     - git-lfs
+FROM centos:7
+ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false \
+    LC_ALL=en_US.UTF-8 \
+    LANG=en_US.UTF-8 \
+    NUGET_XMLDOC_MODE=skip \
+    PATH="/root/.dotnet/tools:${PATH}"
+RUN yum updateinfo list available \
+    && yum install -y wget git libicu which java-11-openjdk \
+    && yum autoremove -y \
+    && rm -rf /var/cache/yum/* \
+    && wget -O gitlfs.rpm https://packagecloud.io/github/git-lfs/packages/el/7/git-lfs-2.8.0-1.el7.x86_64.rpm/download \
+    && gitlfs_sha512='1a78423499a1e02f446e09e8dddbd69587dd7b1f28bf3ff72a8204ae82f671bc2a64dc29d4c6a864319234d1a101e84b66f69ed547c407889cf9ba849e63f25e' \
+    && echo "$gitlfs_sha512 gitlfs.rpm" | sha512sum -c - \
+    && rpm -ivh gitlfs.rpm \
+    && git lfs install \
+    && rm gitlfs.rpm \
+    && wget -O dotnet.tar.gz https://download.visualstudio.microsoft.com/download/pr/9f21e352-9d2c-4e3b-af45-915da89158db/0e8a7ea83cc08d4bcf417a927a36ed6f/dotnet-runtime-2.2.6-linux-x64.tar.gz \
+    && dotnet_sha512='8af7a39407b4a3503a7c6d83106336140eeef2bc24decf1b817c7d5a3e5596c8cefed8f211019148cd89a31759d851836dd6147e544b8c1d183dcfbd5a8d4636' \
+    && echo "$dotnet_sha512 dotnet.tar.gz" | sha512sum -c - \
+    && mkdir -p /usr/share/dotnet \
+    && tar -C /usr/share/dotnet -xzf dotnet.tar.gz \
+    && rm dotnet.tar.gz \
+    && wget -O dotnet.tar.gz https://download.visualstudio.microsoft.com/download/pr/a0e368ac-7161-4bde-a139-1a3ef5a82bbe/439cdbb58950916d3718771c5d986c35/dotnet-sdk-3.0.100-preview8-013656-linux-x64.tar.gz \
+    && dotnet_sha512='448c740418f0ab43b3a8d9f7ccb532e71e590692d3b64239c3f21d46df3a46788b5b824e1a10236e5abe51d4a5143c27b90d08b342a683c96bd9abebc2d33017' \
+    && echo "$dotnet_sha512 dotnet.tar.gz" | sha512sum -c - \
+    && mkdir -p /usr/share/dotnet \
+    && tar -C /usr/share/dotnet -xzf dotnet.tar.gz \
+    && ln -s /usr/share/dotnet/dotnet /usr/bin/dotnet \
+    && rm dotnet.tar.gz
+
+# if use sonarscanner cli version, yum install unzip and append follow
+    # && sonarscanner_ver='4.0.0.1744' \
+    # && wget -O sonarscanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${sonarscanner_ver}-linux.zip \
+    # && sonarscanner_sha512='d65f83ea8f33c6f1b687cfe9db95567012dae97d2935ca2014814b364d2f87f81a1e5ab13dcd5ea5b7fda57f3b2d620a2bd862fb2d87c918c8e2f6f6ff2eca29' \
+    # && echo "$sonarscanner_sha512  sonarscanner.zip" | sha512sum -c - \
+    # && unzip sonarscanner.zip -d /usr/share \
+    # && ln -s /usr/share/sonar-scanner-${sonarscanner_ver}-linux/bin/sonar-scanner /usr/bin/sonar-scanner \
+    # && ln -s /usr/share/sonar-scanner-${sonarscanner_ver}-linux/bin/sonar-scanner-debug /usr/bin/sonar-scanner-debug \
+    # && rm -rf sonarscanner/ sonarscanner.zip
