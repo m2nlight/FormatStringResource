@@ -14,7 +14,7 @@
 # (2) register a gitlab-runner to your gitlab (https://docs.gitlab.com/runner/commands/)
 #     docker exec -it gitlab-runner gitlab-ci-multi-runner register
 #     - input gitlab url and token information (get it from gitlab -> project/settings/ci_cd -> Runners)
-#     - tags: dotnet3sdk
+#     - tags:
 #     - executor: shell
 # (3) install dotnet and build tools into gitlab-runner container
 #     docker exec -it gitlab-runner bash
@@ -57,8 +57,8 @@ after_script:
   - echo "Finish"
    
 test1:
-  tags:
-    - dotnet3sdk
+  # tags:
+  #   - dotnet3sdk
   stage: test
   script: 
     - bash ./sonarscanner.sh "" "" 091e05fd94dd7c6e52ee59e44e4ca444e9edd246
