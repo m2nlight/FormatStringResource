@@ -1,5 +1,6 @@
-# see https://docs.gitlab.com/ce/ci/yaml/README.html for all available options
-
+# https://gitlab.com/help/ci/yaml/README
+# https://docs.gitlab.com/ce/ci/yaml/README.html
+#
 # Run this ci, your runner (or docker container) need install follow:
 # - dotnet core 3 sdk (this is a dotnet core 3 project)
 # - dotnet core 2 runtime (dotnet-sonarscanner run on dotnet core 2 runtime)
@@ -43,23 +44,49 @@
 #       docker exec -it gitlab-runner gitlab-ci-multi-runner unregister --all-runners
 #     - view config.toml
 #       docker exec -it gitlab-runner cat /etc/gitlab-runner/config.toml
-# gitlab code coverage regex: Total\s+\|\s+(\d+\.\d+)\%
-#     you can input it in gitlab -> project/settings/ci_cd -> General pipelines -> Test coverage parsing
-#     then add badge in gitlab -> project/edit -> Badges
-
-image: m2nlight/dotnet3sdk
+#
+# CI Lint
+#     https://gitlab.example.com/project_path/-/ci/lint
+stages:
+  - test
+  - sonarscanner
+  - publish
 
 before_script:
   - dotnet --list-sdks && dotnet --list-runtimes || echo "Can't found dotnet!"
-    #  - export PATH="$PATH:$HOME/.dotnet/tools"
   
 after_script:
   - echo "Finish"
-   
-test1:
-  # tags:
-  #   - dotnet3sdk
+
+test job:
   stage: test
-  script: 
-  #  - bash ./sonarscanner.sh "" "" 091e05fd94dd7c6e52ee59e44e4ca444e9edd246
-    - bash ./test.sh
+  image: m2nlight/dotnet3sdk
+  script: 'bash ./test.sh'
+  coverage: '/Total\s+\|\s+(\d+\.\d+)\%/'
+
+report job:
+  tags:
+    - dotnet3sdk
+  stage: sonarscanner
+  image: m2nlight/dotnet3sdk
+  variables:
+    SONARPROJECT: FormatStringResource
+    SONARSERVER: http://10.134.25.140:9000
+    SONARTOKEN: 091e05fd94dd7c6e52ee59e44e4ca444e9edd246
+  script:
+    - bash ./sonarscanner.sh $SONARPROJECT $SONARSERVER $SONARTOKEN
+  except:
+    - merge_requests
+  allow_failure: true
+
+publish job:
+  tags:
+    - linux
+  stage: publish
+  script:
+    - bash ./publish.sh
+    - bash ./publish_R2R.sh
+    - bash ./publish_AOT.sh
+  when: manual
+  only:
+    - master
