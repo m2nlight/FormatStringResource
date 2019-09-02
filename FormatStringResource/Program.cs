@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -17,18 +17,20 @@ namespace FormatStringResource
     {
         private static ConsoleColor DefaultForegroundColor;
         private static readonly object SyncLock = new object();
-        private static readonly string StdinPipeName = "<Stdin Pipe>";
-        private static readonly int PrintFileNotExistCount = 10;
+        private const string StdinPipeName = "<Stdin Pipe>";
+        private const int PrintFileNotExistCount = 10;
         private static string[]? InputFiles;
         private static bool HasStdinInput;
         private static bool PrintVerbose;
         private static bool Backup = true;
         private static bool NoFormatOutput;
         private static bool DryRun;
+        private static bool Quiet;
         private static TextWriter? Logfile;
-        private static int OKCount;
+        private static int OkCount;
         private static int FailCount;
         private static long CostCount;
+
         private const double GB = 1 << (10 * 3);
 
 #if DEBUG
@@ -57,32 +59,30 @@ namespace FormatStringResource
         [ExcludeFromCodeCoverage]
         public static void Test(string[] args)
         {
+            // set unit test flag
             IsUnitTest = true;
-
+            HasExited = false;
+            // reset default flags
             InputFiles = null;
             HasStdinInput = false;
             PrintVerbose = false;
             Backup = true;
             NoFormatOutput = false;
             DryRun = false;
+            Quiet = false;
             Logfile = null;
-            OKCount = 0;
+            OkCount = 0;
             FailCount = 0;
             CostCount = 0;
-
-            ParseArgs(args);
-            if (HasExited)
-            {
-                return;
-            }
-
-            FormatFiles();
-            if (HasExited)
-            {
-                return;
-            }
-
-            PrintCount();
+            // call execute steps:
+            // 1. ParseArgs
+            // 2. FormatFiles
+            // 3. PrintCount
+            if (!HasExited) ParseArgs(args);
+            if (!HasExited) FormatFiles();
+            if (!HasExited) PrintCount();
+            // free handlers
+            Logfile?.Close();
         }
 #endif
 
@@ -91,11 +91,11 @@ namespace FormatStringResource
         {
             DefaultForegroundColor = Console.ForegroundColor;
 #if WINDOWS
-            SetConsoleCtrlHandler(new HandlerRoutine(ctrlType =>
+            SetConsoleCtrlHandler(ctrlType =>
             {
                 Console.ForegroundColor = DefaultForegroundColor;
                 return false; // no stop exiting
-            }), true);
+            }, true);
 #else
             AppDomain.CurrentDomain.ProcessExit += (s, e) =>
             {
@@ -107,7 +107,10 @@ namespace FormatStringResource
         private static void PrintCount()
         {
             WriteLine(Console.Out, DefaultForegroundColor,
-                $"{Environment.NewLine}SUCCESS: {OKCount:N0}    FAIL: {FailCount:N0}    COST: {CostCount / 1000f:N3}s");
+                $"{Environment.NewLine}" +
+                $"SUCCESS: {OkCount.ToString("N0")}" +
+                $"    FAIL: {FailCount.ToString("N0")}" +
+                $"    COST: {(CostCount / 1000f).ToString("N3")}s");
         }
 
         private static void FormatFiles()
@@ -117,12 +120,14 @@ namespace FormatStringResource
                 WriteAndExit(ExitCode.FilesNotExist, "no input file");
                 return;
             }
+
             var stopWatch = new Stopwatch();
             stopWatch.Start();
             if (InputFiles != null)
             {
-                Parallel.ForEach(InputFiles, filename => FormatFile(filename));
+                Parallel.ForEach(InputFiles, FormatFile);
             }
+
             FormatStdin();
             stopWatch.Stop();
             CostCount = stopWatch.ElapsedMilliseconds;
@@ -134,9 +139,10 @@ namespace FormatStringResource
             {
                 return;
             }
+
             try
             {
-                FormatXML(Console.OpenStandardInput(), StdinPipeName, isFile: false);
+                FormatXml(Console.OpenStandardInput(), StdinPipeName, isFile: false);
             }
             catch (Exception ex)
             {
@@ -151,7 +157,7 @@ namespace FormatStringResource
             {
                 var fileAccess = DryRun ? FileAccess.Read : FileAccess.ReadWrite;
                 using var stream = File.Open(filename, FileMode.Open, fileAccess, FileShare.Read);
-                FormatXML(stream, filename, isFile: true);
+                FormatXml(stream, filename, isFile: true);
             }
             catch (Exception ex)
             {
@@ -161,7 +167,7 @@ namespace FormatStringResource
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static void FormatXML(Stream stream, string inputName, bool isFile)
+        private static void FormatXml(Stream stream, string inputName, bool isFile)
         {
             // check head
             const string xmlHead = "<?xml";
@@ -173,19 +179,29 @@ namespace FormatStringResource
             {
                 throw new FormatException("content is empty");
             }
+
             var span = new ReadOnlySpan<char>(chars, 0, readNum);
             if (!span.StartsWith(xmlHead))
             {
                 throw new FormatException("invalid XML format");
             }
+
             // skip XML description
             var foundIndex = span[xmlHead.Length..].IndexOf(xmlHeadEnd);
             if (foundIndex < 0)
             {
                 throw new FormatException("invalid XML format");
             }
+
             var startIndex = xmlHead.Length + foundIndex + xmlHeadEnd.Length;
-            // load content
+            var sb = LoadXmlContent(stream, inputName, startIndex, chars, span, reader);
+            var root = ParseXmlContent(inputName, sb);
+            WriteXmlFiles(stream, inputName, isFile, root);
+        }
+
+        private static StringBuilder LoadXmlContent(Stream stream, string inputName, int startIndex, char[] chars,
+            ReadOnlySpan<char> span, StreamReader reader)
+        {
             var capacity = 0;
             if (stream.CanSeek)
             {
@@ -193,61 +209,80 @@ namespace FormatStringResource
                 if (length > GB)
                 {
                     WriteLine(Console.Out, ConsoleColor.Yellow,
-                        $"[WARN] The content is so big: {inputName}: {length:N0} bytes");
+                        $"[WARN] The content is so big: {inputName}: {length.ToString("N0")} bytes");
                 }
+
                 var remainLength = length - startIndex;
                 if (remainLength <= int.MaxValue)
                 {
-                    capacity = (int)remainLength;
+                    capacity = (int) remainLength;
                 }
             }
+
             var sb = capacity > 0 ? new StringBuilder(capacity) : new StringBuilder();
             sb.Append(chars, startIndex, span.Length - startIndex);
             sb.Append(reader.ReadToEnd());
-            // parse content
-            var loadOptions = NoFormatOutput ? LoadOptions.PreserveWhitespace : LoadOptions.None;
-            var root = XElement.Parse(sb.ToString(), loadOptions);
-            var q = from item in root.Descendants("Item")
+            return sb;
+        }
+
+        private static XElement ParseXmlContent(string inputName, StringBuilder sb)
+        {
+            static string GetTextDesc(string? text) =>
+                text == null ? "the text is null" : $"text: {text}";
+
+            {
+                var loadOptions = NoFormatOutput ? LoadOptions.PreserveWhitespace : LoadOptions.None;
+                var root = XElement.Parse(sb.ToString(), loadOptions);
+                var q = from item in root.Descendants("Item")
                     let idAttr = item.Attribute("id")
                     where idAttr != null
                     let text = item.Attribute("text")?.ToString()
-                    group new NodeItem(text, item) by (string)idAttr into g
+                    group new NodeItem(text, item) by (string) idAttr
+                    into g
                     where g.Count() > 1
                     select g;
-            foreach (var g in q)
-            {
-                var array = g.ToArray();
-                // find last text is not null for keeping
-                var lastIdx = ^1;
-                if (array[lastIdx].Text == null)
+                foreach (var g in q)
                 {
-                    for (int i = array.Length - 2; i >= 0; i--)
+                    var array = g.ToArray();
+                    // find last text is not null for keeping
+                    var lastIdx = ^1;
+                    if (array[lastIdx].Text == null)
                     {
-                        ref var current = ref array[i];
-                        if (current.Text != null)
+                        for (int i = array.Length - 2; i >= 0; i--)
                         {
-                            // the last item will be kept
-                            (current, array[lastIdx]) = (array[lastIdx], current);
-                            break;
+                            ref var current = ref array[i];
+                            if (current.Text != null)
+                            {
+                                // the last item will be kept
+                                (current, array[lastIdx]) = (array[lastIdx], current);
+                                break;
+                            }
                         }
                     }
-                }
-                // remove invalid or duplicate items
-                for (int i = 0; i < array.Length - 1; i++)
-                {
-                    var (text, item) = array[i];
-                    item.Remove();
+
+                    // remove invalid or duplicate items
+                    for (int i = 0; i < array.Length - 1; i++)
+                    {
+                        var (text, item) = array[i];
+                        item.Remove();
+                        WriteLine(Console.Out,
+                            ConsoleColor.Yellow,
+                            $"{inputName} -  Removed Item: id: {g.Key} {GetTextDesc(text)}",
+                            outputConsole: PrintVerbose);
+                    }
+
                     WriteLine(Console.Out,
                         ConsoleColor.Yellow,
-                        $"{inputName} -  Removed Item: id: {g.Key} {getTextDesc(text)}",
-                        onlyLogfile: !PrintVerbose);
+                        $"{inputName} - Reserved Item: id: {g.Key} {GetTextDesc(array[lastIdx].Text)}",
+                        outputConsole: PrintVerbose);
                 }
-                WriteLine(Console.Out,
-                        ConsoleColor.Yellow,
-                        $"{inputName} - Reserved Item: id: {g.Key} {getTextDesc(array[lastIdx].Text)}",
-                   onlyLogfile: !PrintVerbose);
+
+                return root;
             }
-            // file operations
+        }
+
+        private static void WriteXmlFiles(Stream stream, string inputName, bool isFile, XElement root)
+        {
             if (isFile && !DryRun)
             {
                 if (Backup)
@@ -261,8 +296,10 @@ namespace FormatStringResource
                             File.Move(backupFilename, backup2Filename, true);
                         }
                     }
+
                     File.Copy(inputName, backupFilename, true);
                 }
+
                 var saveOptions = NoFormatOutput ? SaveOptions.DisableFormatting : SaveOptions.None;
                 if (stream.CanSeek && stream.CanWrite)
                 {
@@ -277,40 +314,36 @@ namespace FormatStringResource
                     root.Save(inputName, saveOptions);
                 }
             }
-            WriteLine(Console.Out, ConsoleColor.Green,
-                $"[ OK ] {inputName}", plusOK: true);
 
-            return;
-            static string getTextDesc(string? text) =>
-                text == null ? "the text is null" : $"text: {text}";
+            WriteLine(Console.Out, ConsoleColor.Green,
+                $"[ OK ] {inputName}", plusOk: true);
         }
 
         private static void WriteLine(TextWriter textWriter,
-                                      ConsoleColor foregroundColor,
-                                      string value,
-                                      bool onlyLogfile = false,
-                                      bool plusOK = false,
-                                      bool plusFail = false)
+            ConsoleColor foregroundColor,
+            string value,
+            bool outputConsole = true,
+            bool plusOk = false,
+            bool plusFail = false)
         {
             lock (SyncLock)
             {
-                if (plusOK)
+                if (plusOk)
                 {
-                    OKCount++;
+                    OkCount++;
                 }
                 else if (plusFail)
                 {
                     FailCount++;
                 }
-                if (!onlyLogfile)
+
+                if (outputConsole && !Quiet)
                 {
                     Console.ForegroundColor = foregroundColor;
                     textWriter.WriteLine(value);
                 }
-                if (Logfile != null)
-                {
-                    Logfile.WriteLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fffffff} {value}");
-                }
+
+                Logfile?.WriteLine($"{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fffffff")} {value}");
             }
         }
 
@@ -328,6 +361,7 @@ namespace FormatStringResource
                     filteredArgs.AddRange(args[i..]);
                     break;
                 }
+
                 if (arg == "--debug-attach")
                 {
                     attachTimeout = -1;
@@ -336,6 +370,7 @@ namespace FormatStringResource
                         attachTimeout = result;
                         i++;
                     }
+
                     continue;
                 }
 
@@ -347,6 +382,7 @@ namespace FormatStringResource
             {
                 return;
             }
+
             args = filteredArgs.ToArray();
 
             // wait attach
@@ -355,7 +391,8 @@ namespace FormatStringResource
                 Console.ForegroundColor = ConsoleColor.Yellow;
                 if (!Console.IsInputRedirected && attachTimeout < 0)
                 {
-                    Console.WriteLine("DEBUG MODE: Waiting for debugger attach, press any key to continue...");
+                    WriteLine(Console.Out, DefaultForegroundColor,
+                        "DEBUG MODE: Waiting for debugger attach, press any key to continue...");
                     Console.ReadKey(true);
                 }
                 else
@@ -384,24 +421,30 @@ namespace FormatStringResource
                         var sec = attachTimeout - i;
                         if (canCursorMove)
                         {
-                            Console.Write($"DEBUG MODE: Waiting {sec:N0}s for debugger attach...");
+                            WriteLine(Console.Out, DefaultForegroundColor,
+                                $"DEBUG MODE: Waiting {sec.ToString("N0")}s for debugger attach...");
                             if (sec > 1)
                             {
                                 Console.CursorLeft = 0;
                             }
                             else
                             {
-                                Console.WriteLine();
+                                WriteLine(Console.Out, DefaultForegroundColor,
+                                    "");
                             }
                         }
                         else
                         {
-                            Console.WriteLine($"DEBUG MODE: Waiting {sec:N0}s for debugger attach...");
+                            WriteLine(Console.Out, DefaultForegroundColor,
+                                $"DEBUG MODE: Waiting {sec.ToString("N0")}s for debugger attach...");
                         }
+
                         Thread.Sleep(1000);
                     }
                 }
-                Console.WriteLine(Debugger.IsAttached ? "Debugger Attached!" : "Debugger no attached, yet");
+
+                WriteLine(Console.Out, DefaultForegroundColor,
+                    Debugger.IsAttached ? "Debugger Attached!" : "Debugger no attached, yet");
             }
         }
 
@@ -413,9 +456,10 @@ namespace FormatStringResource
                     $"no input file{Environment.NewLine}use --help to get usage");
                 return;
             }
+
             var logFile = "";
             var printVersion = false;
-            var apppendLog = false;
+            var appendLog = false;
             var listFromPipe = false;
             var parametersEnding = false;
             var listFiles = new HashSet<string>(args.Length);
@@ -471,7 +515,7 @@ namespace FormatStringResource
 
                     if (arg == "--append-log")
                     {
-                        apppendLog = true;
+                        appendLog = true;
                         continue;
                     }
 
@@ -483,13 +527,15 @@ namespace FormatStringResource
                             WriteAndExit(ExitCode.ParseError, "lost log filename");
                             return;
                         }
-                        var logfilename = args[i];
-                        if (logfilename.StartsWith("-"))
+
+                        var logfileName = args[i];
+                        if (logfileName.StartsWith("-"))
                         {
                             WriteAndExit(ExitCode.ParseError, "lost log filename");
                             return;
                         }
-                        logFile = logfilename;
+
+                        logFile = logfileName;
                         continue;
                     }
 
@@ -500,14 +546,16 @@ namespace FormatStringResource
                             WriteAndExit(ExitCode.ParseError, "lost list filename");
                             return;
                         }
-                        var listfilename = FormatFilename(args[i]);
-                        if (!File.Exists(listfilename))
+
+                        var listFileName = FormatFilename(args[i]);
+                        if (!File.Exists(listFileName))
                         {
                             WriteAndExit(ExitCode.ParseError,
-                                $"list file {listfilename} not found");
+                                $"list file {listFileName} not found");
                             return;
                         }
-                        listFiles.Add(listfilename);
+
+                        listFiles.Add(listFileName);
                         continue;
                     }
 
@@ -518,18 +566,28 @@ namespace FormatStringResource
                         continue;
                     }
 
+                    if (arg == "--quiet" ||
+                        arg == "--silent" ||
+                        arg == "-q")
+                    {
+                        Quiet = true;
+                        continue;
+                    }
+
                     if (arg.StartsWith("-"))
                     {
                         WriteAndExit(ExitCode.ParseError);
                         return;
                     }
                 }
+
                 var filename = FormatFilename(arg);
                 if (!File.Exists(filename))
                 {
                     filesNotExist.Add(filename);
                     continue;
                 }
+
                 var fi = new FileInfo(filename);
                 if (fi.Length > 0)
                 {
@@ -537,94 +595,95 @@ namespace FormatStringResource
                 }
             }
 
+            UpdateFlags(printVersion, logFile, appendLog, listFiles, filesNotExist, inputFiles, listFromPipe);
+        }
+
+        private static void UpdateFlags(bool printVersion, string logFile, bool appendLog, HashSet<string> listFiles,
+            HashSet<string> filesNotExist, HashSet<string> inputFiles, bool listFromPipe)
+        {
             if (printVersion)
             {
                 WriteAndExit(ExitCode.Success, GetVersionText());
                 return;
             }
-            if (!string.IsNullOrEmpty(logFile))
+
+            ConfigLogFile(logFile, appendLog);
+            ConfigListFiles(listFiles, filesNotExist, inputFiles);
+            ConfigInRedirected(listFromPipe, filesNotExist, inputFiles);
+            ConfigFileNotFound(filesNotExist);
+
+            if (inputFiles.Count == 0)
             {
-                try
-                {
-                    var fileMode = apppendLog ? FileMode.Append : FileMode.Create;
-                    Logfile = new StreamWriter(File.Open(logFile, fileMode, FileAccess.Write, FileShare.Read));
-                    if (apppendLog)
-                    {
-                        Logfile.WriteLine(new string('-', 40));
-                    }
-                    Logfile.WriteLine(GetVersionText());
-                }
-                catch (Exception ex)
-                {
-                    WriteAndExit(ExitCode.ParseError, $"create log file error: {ex.Message}");
-                    return;
-                }
+                WriteAndExit(ExitCode.ParseError);
+                return;
             }
-            if (listFiles.Count > 0)
+
+            InputFiles = inputFiles.OrderBy(n => n).ToArray();
+        }
+
+        private static void ConfigLogFile(string logFile, bool appendLog)
+        {
+            if (string.IsNullOrEmpty(logFile))
             {
-                try
-                {
-                    foreach (var listfile in listFiles)
-                    {
-                        var listFileInfo = new FileInfo(listfile);
-                        if (!listFileInfo.Exists)
-                        {
-                            WriteAndExit(ExitCode.FilesNotExist,
-                                $"the list file not found: {listFileInfo.FullName}");
-                            return;
-                        }
-                        if (listFileInfo.Length >= GB)
-                        {
-                            WriteLine(Console.Out, ConsoleColor.Yellow,
-                                $"[WARN] The list file is so big: {listFileInfo.FullName}: {listFileInfo.Length:N0} bytes");
-                        }
-                        var inputlines = File.ReadLines(listFileInfo.FullName);
-                        var lines = inputlines.AsParallel().Where(
-                            line => !string.IsNullOrWhiteSpace(line) && !line.StartsWith('#'));
-                        foreach (var line in lines)
-                        {
-                            var filename = FormatFilename(line);
-                            if (!File.Exists(filename))
-                            {
-                                filesNotExist.Add(filename);
-                                continue;
-                            }
-                            var fi = new FileInfo(filename);
-                            if (fi.Length > 0)
-                            {
-                                inputFiles.Add(fi.FullName);
-                            }
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    WriteAndExit(ExitCode.ParseError, $"load list file error: {ex.Message}");
-                    return;
-                }
+                return;
             }
-            if (Console.IsInputRedirected)
+
+            try
             {
-                if (listFromPipe)
+                var fileMode = appendLog ? FileMode.Append : FileMode.Create;
+                Logfile = new StreamWriter(File.Open(logFile, fileMode, FileAccess.Write, FileShare.Read));
+                if (appendLog)
                 {
-                    using var reader = new StreamReader(Console.OpenStandardInput());
-                    while (true)
+                    const string sp = "----------------------------------------";
+                    Logfile.WriteLine(sp);
+                }
+
+                Logfile.WriteLine(GetVersionText());
+            }
+            catch (Exception ex)
+            {
+                WriteAndExit(ExitCode.ParseError, $"create log file error: {ex.Message}");
+            }
+        }
+
+        private static void ConfigListFiles(HashSet<string> listFiles, HashSet<string> filesNotExist,
+            HashSet<string> inputFiles)
+        {
+            if (listFiles.Count == 0)
+            {
+                return;
+            }
+
+            try
+            {
+                foreach (var listFile in listFiles)
+                {
+                    var listFileInfo = new FileInfo(listFile);
+                    if (!listFileInfo.Exists)
                     {
-                        var line = reader.ReadLine();
-                        if (line == null)
-                        {
-                            break;
-                        }
-                        if (string.IsNullOrWhiteSpace(line) || line.StartsWith('#'))
-                        {
-                            continue;
-                        }
+                        WriteAndExit(ExitCode.FilesNotExist,
+                            $"the list file not found: {listFileInfo.FullName}");
+                        return;
+                    }
+
+                    if (listFileInfo.Length >= GB)
+                    {
+                        WriteLine(Console.Out, ConsoleColor.Yellow,
+                            $"[WARN] The list file is so big: {listFileInfo.FullName}: {listFileInfo.Length:N0} bytes");
+                    }
+
+                    var readLines = File.ReadLines(listFileInfo.FullName);
+                    var lines = readLines.AsParallel().Where(
+                        line => !string.IsNullOrWhiteSpace(line) && !line.StartsWith('#'));
+                    foreach (var line in lines)
+                    {
                         var filename = FormatFilename(line);
                         if (!File.Exists(filename))
                         {
                             filesNotExist.Add(filename);
                             continue;
                         }
+
                         var fi = new FileInfo(filename);
                         if (fi.Length > 0)
                         {
@@ -632,46 +691,98 @@ namespace FormatStringResource
                         }
                     }
                 }
-                else
-                {
-                    HasStdinInput = true;
-                }
-#if DEBUG
-                if (IsUnitTest)
-                {
-                    HasStdinInput = false;
-                }
-#endif
             }
-            if (filesNotExist.Count > 0)
+            catch (Exception ex)
             {
-                // print files not exist error
-                var sb = new StringBuilder();
-                sb.AppendFormat("{0:N0} files can't found{1}", filesNotExist.Count, Environment.NewLine);
-                var lineNumber = 1;
-                foreach (var file in filesNotExist)
-                {
-                    if (!PrintVerbose && lineNumber++ > PrintFileNotExistCount)
-                    {
-                        sb.AppendLine("...");
-                        break;
-                    }
-                    sb.AppendLine(file);
-                }
-                WriteAndExit(ExitCode.FilesNotExist, sb.ToString());
+                WriteAndExit(ExitCode.ParseError, $"load list file error: {ex.Message}");
+            }
+        }
+
+        [ExcludeFromCodeCoverage]
+        private static void ConfigInRedirected(bool listFromPipe, HashSet<string> filesNotExist,
+            HashSet<string> inputFiles)
+        {
+            if (!Console.IsInputRedirected)
+            {
                 return;
             }
-            InputFiles = inputFiles.OrderBy(n => n).ToArray();
+#if DEBUG
+            if (IsUnitTest)
+            {
+                HasStdinInput = false;
+                return;
+            }
+#endif
+            if (listFromPipe)
+            {
+                using var reader = new StreamReader(Console.OpenStandardInput());
+                while (true)
+                {
+                    var line = reader.ReadLine();
+                    if (line == null)
+                    {
+                        break;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(line) || line.StartsWith('#'))
+                    {
+                        continue;
+                    }
+
+                    var filename = FormatFilename(line);
+                    if (!File.Exists(filename))
+                    {
+                        filesNotExist.Add(filename);
+                        continue;
+                    }
+
+                    var fi = new FileInfo(filename);
+                    if (fi.Length > 0)
+                    {
+                        inputFiles.Add(fi.FullName);
+                    }
+                }
+            }
+            else
+            {
+                HasStdinInput = true;
+            }
+        }
+
+        private static void ConfigFileNotFound(HashSet<string> filesNotExist)
+        {
+            if (filesNotExist.Count == 0)
+            {
+                return;
+            }
+
+            // print files not exist error
+            var sb = new StringBuilder();
+            sb.AppendFormat("{0} files can't found{1}", filesNotExist.Count.ToString("N0"), Environment.NewLine);
+            var lineNumber = 1;
+            foreach (var file in filesNotExist)
+            {
+                if (!PrintVerbose && lineNumber++ > PrintFileNotExistCount)
+                {
+                    sb.AppendLine("...");
+                    break;
+                }
+
+                sb.AppendLine(file);
+            }
+
+            WriteAndExit(ExitCode.FilesNotExist, sb.ToString());
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static string FormatFilename(string input)
         {
 #if WINDOWS
-            if (input.IndexOf("://") >= 0)
+            if (input.IndexOf("://", StringComparison.Ordinal) >= 0)
             {
                 return input;
             }
+
             return input.Replace('/', '\\');
 #else
             return input;
@@ -682,29 +793,30 @@ namespace FormatStringResource
         private static string GetUsageText()
         {
             var main = AppDomain.CurrentDomain.FriendlyName;
-            var usage = $@"usage: {main} [option] [--] <xmlfiles>
-       {main} [option] --list <listfile>
+            var usage = $@"usage: {main} [option] [--] <XmlFiles>
+       {main} [option] --list <ListFile>
 
 option
-        --append-log     append log file if --log enabled
-        --dry-run        only run, no save result to file.
+      --append-log       append log file if --log enabled
+      --dry-run          only run, no save result to file.
                          recommend use --dry-run with --log or --verbose
-        --list <file>    load a StringResource.xml paths list from a file.
+      --list <file>      load a StringResource.xml paths list from a file.
                          in this file, line head with ""#"" will be skipped
-    -L, --list-pipe      load a list from stdin pipe.
+  -L, --list-pipe        load a list from stdin pipe.
                          if has a stdin pipe and no --list-pipe,
                          it will be considered the content of a StringResource.xml,
                          you have to use --verbose or --log to get the results.
-    -l, --log <file>     output and overwrite the log file
-        --no-backup      don't backup origin file.
+  -l, --log <file>       output and overwrite the log file
+      --no-backup        don't backup origin file.
                          default will backup origin file to *.bak, 
                          if *.bak existed and *.bak~ is not existed,
                          the *.bak will be rename to *.bak~ before.
-        --no-format      don't format output file
-    -v, --verbose        output verbose information
-        --version        output version information and exit";
+      --no-format        don't format output file
+  -q, --quiet, --silent  suppress all normal output
+  -v, --verbose          output verbose information
+      --version          output version information and exit";
 #if DEBUG
-            usage += $@"
+            usage = $@"{usage}
 
 debug option
         --debug-attach [seconds]  wait debugger attach";
@@ -722,7 +834,8 @@ debug option
                 assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
                 assembly.GetCustomAttribute<AssemblyDescriptionAttribute>()?.Description);
 #if DEBUG
-            version += $"{Environment.NewLine}Written by {assembly.GetCustomAttribute<AssemblyCompanyAttribute>()?.Company}";
+            version =
+                $"{version}{Environment.NewLine}Written by {assembly.GetCustomAttribute<AssemblyCompanyAttribute>()?.Company}";
 #endif
             return version;
         }
@@ -736,6 +849,7 @@ debug option
                     {
                         WriteLine(Console.Out, DefaultForegroundColor, appendText);
                     }
+
                     break;
                 case ExitCode.ParseError:
                     WriteLine(Console.Error, DefaultForegroundColor,
@@ -754,30 +868,32 @@ debug option
                     {
                         WriteLine(Console.Error, DefaultForegroundColor, appendText);
                     }
+
                     break;
             }
 
-            if (Logfile != null)
-            {
-                Logfile.Close();
-            }
+            Logfile?.Close();
 #if DEBUG
             if (IsUnitTest)
             {
-                Console.WriteLine($"ExitCode: {(int)exitCode}");
+                WriteLine(Console.Out, DefaultForegroundColor,
+                    $"ExitCode: {((int) exitCode).ToString()}");
                 HasExited = true;
                 return;
             }
 #endif
-            Environment.Exit((int)exitCode);
+            Environment.Exit((int) exitCode);
         }
 
 #if WINDOWS
+        // ReSharper disable MemberCanBePrivate.Global
+        // ReSharper disable InconsistentNaming
+        // ReSharper disable UnusedMember.Global
         [ExcludeFromCodeCoverage]
         [System.Runtime.InteropServices.DllImport("Kernel32")]
         private static extern bool SetConsoleCtrlHandler(HandlerRoutine handler, bool add);
 
-        public delegate bool HandlerRoutine(CtrlTypes CtrlType);
+        public delegate bool HandlerRoutine(CtrlTypes ctrlType);
 
         public enum CtrlTypes
         {
@@ -787,26 +903,9 @@ debug option
             CTRL_LOGOFF_EVENT = 5,
             CTRL_SHUTDOWN_EVENT
         }
+        // ReSharper restore MemberCanBePrivate.Global
+        // ReSharper restore InconsistentNaming
+        // ReSharper restore UnusedMember.Global
 #endif
-    }
-
-
-    internal enum ExitCode
-    {
-        Success,
-        ParseError,
-        FilesNotExist,
-        LoadXmlError
-    }
-
-
-    internal class NodeItem
-    {
-        public string? Text { get; }
-        public XElement Item { get; }
-        public NodeItem(string text, XElement item)
-            => (Text, Item) = (text, item);
-        public void Deconstruct(out string? text, out XElement item)
-            => (text, item) = (Text, Item);
     }
 }

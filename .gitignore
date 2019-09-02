@@ -1,9 +1,11 @@
 .DS_Store
 .vs/
+.idea/
+.sonarqube/
 bin/
 obj/
 publish/
 TestResults/
-.sonarqube/
 coverage.json
 coverage.opencover.xml
+*.user

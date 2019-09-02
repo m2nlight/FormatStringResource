@@ -22,18 +22,18 @@ If you working on Windows and installed [git-bash](https://git-scm.com/download/
 
 Call `test.sh` will run unit test and output coverage.
 
-### SonarQube
+### Sonar Scanner
 
 Call `sonarscanner.sh` will run dotnet sonarscanner.
 
-#### Requirement
+#### Sonar Scanner Requirement
 
 - dotnet core 2
 - set ~/.dotnet/tools to PATH
-- a sonarqube server
+- a SonarQube server
   and got the project key(this example is FormatStringResource) and login token
 
-#### Usage
+#### Sonar Scanner Usage
 
 ```sh
 bash sonarscanner.sh FormatStringResource http://10.134.25.140:9000 84467e15b5edac31b021c135a439b08226406f35 

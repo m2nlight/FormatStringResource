@@ -6,30 +6,35 @@ using Xunit.Abstractions;
 namespace FormatStringResource.Tests
 {
     /// <summary>
-    /// Format sample unit tests (note: not support stdin input when unittest)
+    /// Format sample unit tests (note: not support stdin input when unit test)
     /// </summary>
     [CollectionDefinition("FormatTheSampleFile", DisableParallelization = true)]
     public class FormatTheSampleFile
     {
+        private const string DefaultStringResourceFile = "StringResource.example.xml";
+        private const string DefaultStringResourceTargetFile = "StringResource.example.target.xml";
+        private const string DefaultListFile = "listfile.txt";
         private readonly ITestOutputHelper _output;
+        public FormatTheSampleFile(ITestOutputHelper output) => _output = output;
 
-        public FormatTheSampleFile(ITestOutputHelper output)
-            => _output = output;
-
-        [Fact]
-        public void TestParseSampleFile_Success()
+        private string Test(params string[] args)
         {
-            const string @in = "StringResource.example.xml";
-            const string @out = "StringResource.example.out.xml";
             using var sw = new StringWriter();
             Console.SetOut(sw);
             Console.SetError(sw);
-            Program.Test(new[] { "-v", @in });
-            sw.Flush();
-            var actual = File.ReadAllText(@in);
-            var excepted = File.ReadAllText(@out);
+            Program.Test(args);
+            sw.Close();
             var output = sw.ToString();
-            _output.WriteLine(output);
+            _output.WriteLine($"===Console Output Begin===\n{output}\n===Console Output End===");
+            return output;
+        }
+
+        [Fact]
+        public void Test_DefaultSampleFile_Verbose_Success()
+        {
+            var output = Test("-v", DefaultStringResourceFile);
+            var actual = File.ReadAllText(DefaultStringResourceFile);
+            var excepted = File.ReadAllText(DefaultStringResourceTargetFile);
             Assert.Contains("SUCCESS: 1", output);
             Assert.Equal(excepted, actual,
                 ignoreLineEndingDifferences: true,
@@ -37,56 +42,46 @@ namespace FormatStringResource.Tests
         }
 
         [Fact]
-        public void TestParseSampleFile_Failed()
+        public void Test_DefaultListFileAsSampleFile_Failed()
         {
-            using var sw = new StringWriter();
-            Console.SetOut(sw);
-            Console.SetError(sw);
-            Program.Test(new[] { "listfile.txt" });
-            sw.Flush();
-            var output = sw.ToString();
-            _output.WriteLine(output);
+            var output = Test(DefaultListFile);
             Assert.Contains("FAIL: 1", output);
         }
 
         [Fact]
-        public void TestParseSampleFile_FromList_Success()
+        public void Test_DefaultListFile_NoBackup_Success()
         {
-            using var sw = new StringWriter();
-            Console.SetOut(sw);
-            Console.SetError(sw);
-            Program.Test(new[] { "--list", "listfile.txt" });
-            sw.Flush();
-            var output = sw.ToString();
-            _output.WriteLine(output);
+            var output = Test("--list", DefaultListFile, "--no-backup");
             Assert.Contains("SUCCESS: 1", output);
         }
 
         [Fact]
-        public void TestParseSampleFile_DryRun()
+        public void Test_DefaultSampleFile_DryRun_LogFile_Success()
         {
-            const string @in = "StringResource.example.xml";
-            using var sw = new StringWriter();
-            Console.SetOut(sw);
-            Console.SetError(sw);
-            Program.Test(new[] { "--dry-run", @in });
-            sw.Flush();
-            var output = sw.ToString();
-            _output.WriteLine(output);
+            var output = Test("--dry-run", "--log", "1.log", DefaultStringResourceFile);
             Assert.Contains("SUCCESS: 1", output);
         }
 
         [Fact]
-        public void Test_ArgsParse_Failed()
+        public void Test_DefaultSampleFile_DryRun_AppendLogFile_Success()
         {
-            using var sw = new StringWriter();
-            Console.SetOut(sw);
-            Console.SetError(sw);
-            Program.Test(new[] { "not_existed_file.xml" });
-            sw.Flush();
-            var output = sw.ToString();
-            _output.WriteLine(output);
-            Assert.Contains("ERROR: Files not exist", output);
+            var output = Test("--dry-run", "--log", "1.log", "--append-log", DefaultStringResourceFile);
+            Assert.Contains("SUCCESS: 1", output);
         }
+
+        [Fact]
+        public void Test_EmptyArgs_Failed()
+        {
+            var output = Test();
+            Assert.Contains("ERROR:", output);
+        }
+
+        [Fact]
+        public void Test_ArgsParse_Quiet_NoOutput()
+        {
+            var output = Test("--quiet");
+            Assert.Empty(output);
+        }
+
     }
 }

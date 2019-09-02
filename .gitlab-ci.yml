@@ -4,7 +4,7 @@
 # Run this ci, your runner (or docker container) need install follow:
 # - dotnet core 3 sdk (this is a dotnet core 3 project)
 # - dotnet core 2 runtime (dotnet-sonarscanner run on dotnet core 2 runtime)
-# - libicu-dev (if you recived a error: Process terminated. Couldn't find a valid ICU package installed on the system. Set the configuration flag System.Globalization.Invariant to true if you want to run with no globalization support.)
+# - libicu-dev (if you received a error: Process terminated. Couldn't find a valid ICU package installed on the system. Set the configuration flag System.Globalization.Invariant to true if you want to run with no globalization support.)
 # - openjdk-8-jre (dotnet-sonarscanner requires java runtime)
 # - git-lfs (option)
 # - build-essential (option)
