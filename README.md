@@ -4,12 +4,12 @@ Format StringResource.xml files
 
 ## Environment
 
-- [dotnet core 3](https://dotnet.microsoft.com/download/dotnet-core/3.0)
-- Windows/Linux/macOS
+- [dotnet 5](https://dotnet.microsoft.com/download/dotnet/5.0)
+- Windows/Linux x64/macOS
 
 ## Build
 
-- Run `publish.sh` will make win-x64, linux-x64 and osx-x64 executable file in
+- Run `publish.sh` will make win-x64, win-x86, linux-x64, linux-musl-x64 and osx-x64 executable file in
 `publish/$runtime/bin` folder.
 - Run `publish_R2R.sh` will try to make ReadyToRun executable file in
 `publish/$runtime/r2r` folder.

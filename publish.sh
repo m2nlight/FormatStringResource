@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# one line command: 
+# one line command:
 # runtimes=( win-x64 linux-x64 osx-x64 ); for i in "${runtimes[@]}"; do printf "\n>>> building $i ...\n\n"; dotnet publish -r $i -c Release -p:PublishSingleFile=true; done
 set +x +e
-cat << EOF
-dotnet-core-3.0: https://docs.microsoft.com/en-us/dotnet/core/whats-new/dotnet-core-3-0
+cat <<EOF
+dotnet: https://dotnet.microsoft.com/download
 runtimes: https://docs.microsoft.com/en-us/dotnet/core/rid-catalog
 publish args: https://docs.microsoft.com/en-us/dotnet/core/tools/dotnet-publish
 msbuild variables:
@@ -16,11 +16,11 @@ https://docs.microsoft.com/en-us/dotnet/core/tools/csproj#assemblyinfo-propertie
 EOF
 
 csproj=FormatStringResource/FormatStringResource.csproj
-runtimes=( win-x64 linux-x64 osx-x64 )
+runtimes=(win-x64 win-x86 linux-x64 linux-musl-x64 osx-x64)
 config='Release'
 output='publish'
 versionSuffix=''
-export DOTNET_CLI_TELEMETRY_OPTOUT=1 CppCompilerAndLinker=clang
+export DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_CLI_UI_LANGUAGE=en DOTNET_NEW_LOCAL_SEARCH_FILE_ONLY=1 CppCompilerAndLinker=clang
 declare -i r2r=0
 declare -i aot=0
 declare -i noRmOut=0
@@ -43,10 +43,10 @@ until [ $# -eq 0 ]; do
 	--no-rm)
 		noRmOut=1
 		;;
-	--verbose|-v)
+	--verbose | -v)
 		verbose=1
 		;;
-	--runtime|-r)
+	--runtime | -r)
 		if [ $userRuntimes -eq 0 ]; then
 			userRuntimes=1
 			runtimes=()
@@ -58,7 +58,7 @@ until [ $# -eq 0 ]; do
 		fi
 		runtimes+=($1)
 		;;
-	--version-suffix|--vs)
+	--version-suffix | --vs)
 		shift
 		if [ -z "$1" ] || [[ "$1" =~ ^\- ]]; then
 			printf "\nERROR: version suffix argument error: $1\n\n"
@@ -100,16 +100,22 @@ for runtime in "${runtimes[@]}"; do
 	if [ $aot -eq 1 ]; then
 		resArgs="$resArgs -p:DefineConstants=\"AOT\""
 		pubArgs="$resArgs $pubArgs -o $output/$runtime/aot"
-	elif [ $r2r -eq 1 ]; then
-		resArgs="$resArgs -p:DefineConstants=\"R2R\""
-		pubArgs="$resArgs $pubArgs -o $output/$runtime/r2r -p:PublishSingleFile=true -p:PublishTrimmed=true"
 	else
-		pubArgs="$resArgs $pubArgs -o $output/$runtime/bin -p:PublishSingleFile=true -p:PublishTrimmed=true"
+		if [ $r2r -eq 1 ]; then
+			resArgs="$resArgs -p:DefineConstants=\"R2R\""
+			pubArgs="$resArgs $pubArgs -o $output/$runtime/r2r -p:PublishSingleFile=true -p:PublishTrimmed=true"
+		else
+			pubArgs="$resArgs $pubArgs -o $output/$runtime/bin -p:PublishSingleFile=true -p:PublishTrimmed=true"
+		fi
+
+		if [[ $runtime == win* ]]; then
+			pubArgs="$pubArgs -p:IncludeNativeLibrariesForSelfExtract=true"
+		fi
 	fi
 
 	printf "\033[1mdotnet restore --configfile nuget.config -r $runtime $resArgs $csproj ...\033[0m\n"
 	dotnet restore --configfile nuget.config -r $runtime $resArgs $csproj
-	
+
 	printf "\033[1mdotnet publish -r $runtime -c $config $pubArgs $csproj ...\033[0m\n"
 	dotnet publish -r $runtime -c $config $pubArgs $csproj
 	ret=$?
