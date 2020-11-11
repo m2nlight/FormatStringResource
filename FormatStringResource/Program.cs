@@ -423,7 +423,7 @@ namespace FormatStringResource
                         if (canCursorMove)
                         {
                             WriteLine(Console.Out, DefaultForegroundColor,
-                                $"DEBUG MODE: Waiting {sec.ToString("N0")}s for debugger attach...");
+                                $"DEBUG MODE: Waiting {sec:N0}s for debugger attach...");
                             if (sec > 1)
                             {
                                 Console.CursorLeft = 0;
@@ -437,7 +437,7 @@ namespace FormatStringResource
                         else
                         {
                             WriteLine(Console.Out, DefaultForegroundColor,
-                                $"DEBUG MODE: Waiting {sec.ToString("N0")}s for debugger attach...");
+                                $"DEBUG MODE: Waiting {sec:N0}s for debugger attach...");
                         }
 
                         Thread.Sleep(1000);
