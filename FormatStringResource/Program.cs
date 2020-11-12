@@ -216,7 +216,7 @@ namespace FormatStringResource
                 var remainLength = length - startIndex;
                 if (remainLength <= int.MaxValue)
                 {
-                    capacity = (int) remainLength;
+                    capacity = (int)remainLength;
                 }
             }
 
@@ -235,13 +235,13 @@ namespace FormatStringResource
                 var loadOptions = NoFormatOutput ? LoadOptions.PreserveWhitespace : LoadOptions.None;
                 var root = XElement.Parse(sb.ToString(), loadOptions);
                 var q = from item in root.Descendants("Item")
-                    let idAttr = item.Attribute("id")
-                    where idAttr != null
-                    let text = item.Attribute("text")?.ToString()
-                    group new NodeItem(text, item) by (string) idAttr
+                        let idAttr = item.Attribute("id")
+                        where idAttr != null
+                        let text = item.Attribute("text")?.ToString()
+                        group new NodeItem(text, item) by (string)idAttr
                     into g
-                    where g.Count() > 1
-                    select g;
+                        where g.Count() > 1
+                        select g;
                 foreach (var g in q)
                 {
                     var array = g.ToArray();
@@ -831,12 +831,12 @@ debug option
             var assembly = Assembly.GetExecutingAssembly();
             var version = string.Format("{1} v{2}{0}{3}",
                 Environment.NewLine,
-                AppDomain.CurrentDomain.FriendlyName,
+                assembly.GetCustomAttribute<AssemblyProductAttribute>()?.Product,
                 assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
                 assembly.GetCustomAttribute<AssemblyDescriptionAttribute>()?.Description);
 #if DEBUG
-            version =
-                $"{version}{Environment.NewLine}Written by {assembly.GetCustomAttribute<AssemblyCompanyAttribute>()?.Company}";
+            version = $@"{version}
+Written by {assembly.GetCustomAttribute<AssemblyCompanyAttribute>()?.Company}";
 #endif
             return version;
         }
@@ -878,12 +878,12 @@ debug option
             if (IsUnitTest)
             {
                 WriteLine(Console.Out, DefaultForegroundColor,
-                    $"ExitCode: {((int) exitCode).ToString()}");
+                    $"ExitCode: {((int)exitCode).ToString()}");
                 HasExited = true;
                 return;
             }
 #endif
-            Environment.Exit((int) exitCode);
+            Environment.Exit((int)exitCode);
         }
 
 #if WINDOWS

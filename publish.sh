@@ -2,18 +2,6 @@
 # one line command:
 # runtimes=( win-x64 linux-x64 osx-x64 ); for i in "${runtimes[@]}"; do printf "\n>>> building $i ...\n\n"; dotnet publish -r $i -c Release -p:PublishSingleFile=true; done
 set +x +e
-cat <<EOF
-dotnet: https://dotnet.microsoft.com/download
-runtimes: https://docs.microsoft.com/en-us/dotnet/core/rid-catalog
-publish args: https://docs.microsoft.com/en-us/dotnet/core/tools/dotnet-publish
-msbuild variables:
-https://docs.microsoft.com/en-us/visualstudio/msbuild/msbuild-reserved-and-well-known-properties
-https://docs.microsoft.com/en-us/visualstudio/msbuild/common-msbuild-project-properties
-https://docs.microsoft.com/en-us/cpp/build/reference/common-macros-for-build-commands-and-properties
-https://docs.microsoft.com/en-us/visualstudio/msbuild/msbuild-well-known-item-metadata
-https://docs.microsoft.com/en-us/visualstudio/msbuild/msbuild-special-characters
-https://docs.microsoft.com/en-us/dotnet/core/tools/csproj#assemblyinfo-properties
-EOF
 
 csproj=FormatStringResource/FormatStringResource.csproj
 runtimes=(win-x64 win-x86 linux-x64 linux-musl-x64 osx-x64)
@@ -21,6 +9,7 @@ config='Release'
 output='publish'
 versionSuffix=''
 export DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_CLI_UI_LANGUAGE=en DOTNET_NEW_LOCAL_SEARCH_FILE_ONLY=1 CppCompilerAndLinker=clang
+
 declare -i r2r=0
 declare -i aot=0
 declare -i noRmOut=0
@@ -73,6 +62,35 @@ until [ $# -eq 0 ]; do
 	esac
 	shift
 done
+
+git diff-index --quiet HEAD || {
+	printf 'Need to commit!'
+	if [ -t 1 ]; then
+		printf '\n\033[1;36mPress any key to exit...\033[0m'
+		read -n1
+		printf '\n'
+	fi
+	exit 1
+}
+
+cat <<EOF
+dotnet: https://dotnet.microsoft.com/download
+runtimes: https://docs.microsoft.com/en-us/dotnet/core/rid-catalog
+publish args: https://docs.microsoft.com/en-us/dotnet/core/tools/dotnet-publish
+msbuild variables:
+https://docs.microsoft.com/en-us/visualstudio/msbuild/msbuild-reserved-and-well-known-properties
+https://docs.microsoft.com/en-us/visualstudio/msbuild/common-msbuild-project-properties
+https://docs.microsoft.com/en-us/cpp/build/reference/common-macros-for-build-commands-and-properties
+https://docs.microsoft.com/en-us/visualstudio/msbuild/msbuild-well-known-item-metadata
+https://docs.microsoft.com/en-us/visualstudio/msbuild/msbuild-special-characters
+https://docs.microsoft.com/en-us/dotnet/core/tools/csproj#assemblyinfo-properties
+EOF
+
+# version 1.0.0-rc.1+aea8dff
+commitId=$(git rev-parse --short HEAD) || commitId=''
+[ -z "$versionSuffix" ] || versionSuffix="-$versionSuffix"
+[ -z "$commitId" ] || versionSuffix="$versionSuffix+$commitId"
+
 declare -i count=${#runtimes[*]}
 declare -i num=1
 # cleanup
@@ -83,11 +101,6 @@ if [ $noRmOut -eq 0 ]; then
 	printf '\033[1;36mOK\033[0m\n'
 	##dotnet clean
 fi
-
-# version 1.0.0-rc.1+aea8dff
-commitId=$(git rev-parse --short HEAD) || commitId=''
-[ -z "$versionSuffix" ] || versionSuffix="-$versionSuffix"
-[ -z "$commitId" ] || versionSuffix="$versionSuffix+$commitId"
 
 # build
 for runtime in "${runtimes[@]}"; do
